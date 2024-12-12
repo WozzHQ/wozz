@@ -44,21 +44,20 @@ resources:
 WOZZ KUBERNETES AUDIT
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Cluster Overview:
-  - Total Pods: 47
-  - Total Nodes: 5
+💰 ANNUAL WASTE DETECTED: $14,880
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Resource Waste Found:
-  - Over-Provisioned Memory: $840/month
-  - Over-Provisioned CPU: $360/month
-  - Orphaned Load Balancers: $40/month
+Breakdown by Category:
+  Memory: $840/mo ($10,080/year)
+  CPU: $360/mo ($4,320/year)
+  Load Balancers: $40/mo ($480/year) — 2 orphaned
 
-Estimated Annual Savings: $14,880
-
-Top Offender:
-  api-gateway (namespace: production)
-  Memory: Limit 8Gi, Request 1Gi
-  CPU: Limit 4, Request 500m
+🎯 #1 Biggest Waster:
+  Pod: api-gateway
+  Namespace: production
+  💸 Wasting: $8,400/year
+  
+  💡 Fix: Lower memory request to match actual usage
 ```
 
 ---
