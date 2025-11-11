@@ -1,0 +1,42 @@
+name: wozz
+
+on:
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  cost-lint:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      contents: read
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Run wozz
+        id: linter
+        uses: ./
+        continue-on-error: true
+      
+      - name: Post PR Comment
+        if: steps.linter.outcome == 'failure'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `### 🚨 wozz Found Issues!
+
+            Our linter found the following potential cloud cost bugs:
+
+            Check the "Run wozz" step above for detailed line numbers and file locations.
+
+            These *might* be harmless, or they *might* be $10,000/mo bugs.
+            
+            To find out, visit https://wozz.io to connect your cloud account and see the real-time cost impact.`
+            })
+

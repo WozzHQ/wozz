@@ -1,0 +1,28 @@
+name: 'wozz'
+description: 'Scans Python code for expensive cloud cost anti-patterns.'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.x'
+      shell: bash
+
+    - name: Run wozz
+      shell: bash
+      run: |
+        # Find all Python files, excluding hidden directories, __pycache__, and the cost_bug_finder.py itself
+        python_files=$(find . -name '*.py' -not -path '*/\.*' -not -path '*/__pycache__/*' -not -name 'cost_bug_finder.py')
+        if [ -z "$python_files" ]; then
+          echo "No Python files found to analyze."
+          exit 0
+        fi
+        echo "Found Python files:"
+        echo "$python_files"
+        echo ""
+        # Execute cost bug finder on all found files
+        # $GITHUB_ACTION_PATH points to the action's directory
+        python3 "$GITHUB_ACTION_PATH/cost_bug_finder.py" $python_files
+

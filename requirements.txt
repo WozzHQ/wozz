@@ -1,0 +1,3 @@
+# No external dependencies required
+# All dependencies (ast, argparse) are part of Python standard library
+
