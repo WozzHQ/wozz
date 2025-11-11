@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+    <title>wozz - Find $10,000 Cloud Bugs in Your Code</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        emerald: {
+                            50: '#ecfdf5',
+                            100: '#d1fae5',
+                            200: '#a7f3d0',
+                            300: '#6ee7b7',
+                            400: '#34d399',
+                            500: '#10b981',
+                            600: '#059669',
+                            700: '#047857',
+                            800: '#065f46',
+                            900: '#064e3b',
+                        }
+                    },
+                    animation: {
+                        'fade-in': 'fadeIn 0.8s ease-out',
+                        'fade-in-up': 'fadeInUp 0.8s ease-out',
+                        'fade-in-delay': 'fadeIn 1s ease-out 0.3s both',
+                        'float': 'float 3s ease-in-out infinite',
+                        'sparkle': 'sparkle 2s ease-in-out infinite',
+                        'gradient': 'gradient 8s ease infinite',
+                    },
+                    keyframes: {
+                        fadeIn: {
+                            '0%': { opacity: '0' },
+                            '100%': { opacity: '1' },
+                        },
+                        fadeInUp: {
+                            '0%': { opacity: '0', transform: 'translateY(30px)' },
+                            '100%': { opacity: '1', transform: 'translateY(0)' },
+                        },
+                        float: {
+                            '0%, 100%': { transform: 'translateY(0px)' },
+                            '50%': { transform: 'translateY(-20px)' },
+                        },
+                        sparkle: {
+                            '0%, 100%': { opacity: '0.3', transform: 'scale(1)' },
+                            '50%': { opacity: '1', transform: 'scale(1.2)' },
+                        },
+                        gradient: {
+                            '0%, 100%': { backgroundPosition: '0% 50%' },
+                            '50%': { backgroundPosition: '100% 50%' },
+                        },
+                    },
+                },
+            },
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            scroll-behavior: smooth;
+        }
+        
+        .sparkle {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: radial-gradient(circle, #10b981 0%, transparent 70%);
+            border-radius: 50%;
+            pointer-events: none;
+        }
+        
+        .gradient-text {
+            background: linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            background-size: 200% 200%;
+            animation: gradient 8s ease infinite;
+        }
+        
+        .glass-effect {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+        
+        .card-hover {
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .card-hover:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 20px 40px rgba(16, 185, 129, 0.15);
+        }
+        
+        .fade-in-on-scroll {
+            opacity: 0;
+            transform: translateY(30px);
+            transition: opacity 0.8s ease-out, transform 0.8s ease-out;
+        }
+        
+        .fade-in-on-scroll.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        
+        @keyframes shimmer {
+            0% { background-position: -1000px 0; }
+            100% { background-position: 1000px 0; }
+        }
+        
+        .shimmer {
+            background: linear-gradient(90deg, transparent, rgba(16, 185, 129, 0.1), transparent);
+            background-size: 1000px 100%;
+            animation: shimmer 3s infinite;
+        }
+    </style>
+</head>
+<body class="bg-white text-gray-900 antialiased">
+    <!-- Sparkle Background Elements -->
+    <div class="fixed inset-0 overflow-hidden pointer-events-none z-0">
+        <div class="sparkle absolute top-20 left-10 animate-sparkle" style="animation-delay: 0s;"></div>
+        <div class="sparkle absolute top-40 right-20 animate-sparkle" style="animation-delay: 0.5s;"></div>
+        <div class="sparkle absolute bottom-40 left-1/4 animate-sparkle" style="animation-delay: 1s;"></div>
+        <div class="sparkle absolute top-1/2 right-1/3 animate-sparkle" style="animation-delay: 1.5s;"></div>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="glass-effect border-b border-gray-100 sticky top-0 z-50 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center">
+                    <span class="text-2xl font-bold gradient-text">wozz</span>
+                </div>
+                <div class="flex items-center gap-6">
+                    <a href="airbyte-story.html" class="text-gray-700 hover:text-gray-900 font-medium transition-colors duration-200">
+                        Blog
+                    </a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="relative overflow-hidden pt-32 pb-40 px-4 sm:px-6 lg:px-8">
+        <div class="max-w-5xl mx-auto text-center relative z-10">
+            <h1 class="text-6xl sm:text-7xl lg:text-8xl font-bold mb-8 leading-tight animate-fade-in-up">
+                That $10,000 AWS bill<br>
+                <span class="gradient-text">wasn't your fault.</span>
+            </h1>
+            <h2 class="text-2xl sm:text-3xl lg:text-4xl font-light text-gray-600 mb-16 animate-fade-in-delay">
+                It was a 14x cost bug on line 91.
+            </h2>
+            <form id="hero-form" class="flex flex-col sm:flex-row gap-4 max-w-lg mx-auto animate-fade-in-delay" action="https://formspree.io/f/xovyqpvg" method="POST">
+                <input 
+                    type="email" 
+                    name="email"
+                    placeholder="Enter your email" 
+                    required
+                    class="flex-1 px-6 py-4 bg-gray-50 border border-gray-200 rounded-2xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-300 shadow-sm hover:shadow-md"
+                >
+                <button type="submit" class="px-8 py-4 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white font-semibold rounded-2xl transition-all duration-300 whitespace-nowrap shadow-lg hover:shadow-xl transform hover:scale-105">
+                    Join Private Beta
+                </button>
+            </form>
+            <div id="hero-form-message" class="mt-4 text-center text-emerald-600 font-medium hidden"></div>
+        </div>
+        
+        <!-- Decorative Elements -->
+        <div class="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
+            <div class="absolute top-20 right-10 w-72 h-72 bg-emerald-100 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-float"></div>
+            <div class="absolute bottom-20 left-10 w-72 h-72 bg-emerald-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-float" style="animation-delay: 1s;"></div>
+        </div>
+    </section>
+
+    <!-- Problem Section -->
+    <section class="py-32 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-white to-gray-50">
+        <div class="max-w-5xl mx-auto fade-in-on-scroll">
+            <h3 class="text-4xl sm:text-5xl font-bold mb-8 text-center">
+                Stop Blaming "Usage".<br>
+                <span class="gradient-text">Start Finding the Bug.</span>
+            </h3>
+            <div class="bg-white rounded-3xl p-12 shadow-xl border border-gray-100 card-hover">
+                <p class="text-xl sm:text-2xl text-gray-700 leading-relaxed text-center font-light">
+                    Current FinOps tools are <span class="font-semibold text-gray-900">'Accountants'</span>—they just show you the bill after the money is gone. They tell you 'S3 is expensive' but not why. <span class="font-semibold gradient-text">Wozz is a 'Detective'</span> that finds the exact line of code that's costing you.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Solution Section -->
+    <section class="py-32 px-4 sm:px-6 lg:px-8">
+        <div class="max-w-6xl mx-auto">
+            <h3 class="text-4xl sm:text-5xl font-bold mb-8 text-center fade-in-on-scroll">
+                Find Bugs Before<br>
+                <span class="gradient-text">You Merge.</span>
+            </h3>
+            <p class="text-xl sm:text-2xl text-gray-600 leading-relaxed text-center mb-20 max-w-3xl mx-auto font-light fade-in-on-scroll">
+                Wozz scans every Pull Request, finds 'cost anti-patterns' (like N+1 API calls), and posts a comment before it hits production.
+            </p>
+            
+            <!-- GitHub PR Comment Mockup -->
+            <div class="max-w-5xl mx-auto bg-white rounded-3xl overflow-hidden shadow-2xl border border-gray-200 card-hover fade-in-on-scroll">
+                <div class="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200 px-8 py-6 flex items-center gap-4">
+                    <div class="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-white font-bold shadow-lg">
+                        w
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span class="font-semibold text-gray-900">wozz-bot</span>
+                            <span class="text-gray-500 text-sm">commented</span>
+                        </div>
+                        <div class="text-gray-400 text-sm">just now</div>
+                    </div>
+                </div>
+                <div class="p-8">
+                    <div class="flex items-start gap-4 mb-6">
+                        <span class="text-3xl animate-bounce">🚨</span>
+                        <div class="flex-1">
+                            <div class="font-bold text-2xl text-red-500 mb-4">Cost Bug Found!</div>
+                            <div class="space-y-3 text-gray-700 mb-6 text-lg">
+                                <div>
+                                    <span class="text-gray-500 font-medium">File:</span> 
+                                    <code class="ml-2 bg-emerald-50 text-emerald-700 px-3 py-1 rounded-lg font-mono text-sm border border-emerald-200">zip_reader.py</code>
+                                </div>
+                                <div>
+                                    <span class="text-gray-500 font-medium">Line:</span> 
+                                    <span class="ml-2 text-emerald-600 font-bold text-xl">91</span>
+                                </div>
+                                <div class="pt-2">
+                                    <span class="text-gray-500 font-medium">Issue:</span> 
+                                    <span class="ml-2">Found <code class="bg-emerald-50 text-emerald-700 px-2 py-1 rounded font-mono text-sm border border-emerald-200">get_object</code> call inside a while loop. This N+1 pattern can cause a <span class="text-red-500 font-bold text-xl">14x cost multiplier</span> on S3 GET requests.</span>
+                                </div>
+                            </div>
+                            <a href="#" class="inline-block px-6 py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white font-semibold rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105">
+                                Click here to see the real-time cost impact & AI-generated fix →
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Social Proof Section -->
+    <section class="py-32 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-gray-50 to-white">
+        <div class="max-w-5xl mx-auto fade-in-on-scroll">
+            <h3 class="text-4xl sm:text-5xl font-bold mb-12 text-center">
+                It's a <span class="gradient-text">Real Problem.</span>
+            </h3>
+            <div class="bg-white rounded-3xl p-12 sm:p-16 shadow-xl border border-gray-100 card-hover">
+                <div class="relative">
+                    <div class="absolute -top-4 -left-4 text-6xl text-emerald-100">"</div>
+                    <p class="text-2xl sm:text-3xl text-gray-700 leading-relaxed italic mb-6 relative z-10 font-light">
+                        We used Wozz to scan Airbyte's S3 connector and found a 14x get_object loop. For a user processing 10,000 files, that's 140,000 API calls instead of 10,000.
+                    </p>
+                    <div class="absolute -bottom-4 -right-4 text-6xl text-emerald-100 rotate-180">"</div>
+                </div>
+                <p class="text-xl text-emerald-600 font-bold mt-8 text-center">
+                    — The Wozz Team (from our open-source audit of Airbyte)
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Final CTA Section -->
+    <section class="py-32 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
+        <div class="absolute inset-0 bg-gradient-to-br from-emerald-50 via-white to-emerald-50 shimmer"></div>
+        <div class="max-w-5xl mx-auto text-center relative z-10 fade-in-on-scroll">
+            <h3 class="text-4xl sm:text-5xl lg:text-6xl font-bold mb-16">
+                Stop the next<br>
+                <span class="gradient-text">"horror story" bill.</span><br>
+                Before it happens.
+            </h3>
+            <form id="cta-form" class="flex flex-col sm:flex-row gap-4 max-w-lg mx-auto" action="https://formspree.io/f/xovyqpvg" method="POST">
+                <input 
+                    type="email" 
+                    name="email"
+                    placeholder="Enter your email" 
+                    required
+                    class="flex-1 px-6 py-4 bg-white border border-gray-200 rounded-2xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-300 shadow-lg hover:shadow-xl"
+                >
+                <button type="submit" class="px-8 py-4 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white font-semibold rounded-2xl transition-all duration-300 whitespace-nowrap shadow-xl hover:shadow-2xl transform hover:scale-105">
+                    Join the Private Beta
+                </button>
+            </form>
+            <div id="cta-form-message" class="mt-4 text-center text-emerald-600 font-medium hidden"></div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="border-t border-gray-200 py-12 px-4 sm:px-6 lg:px-8 bg-white">
+        <div class="max-w-7xl mx-auto text-center text-gray-500">
+            <p>&copy; 2024 wozz. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <script>
+        // Intersection Observer for fade-in animations
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -50px 0px'
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('visible');
+                }
+            });
+        }, observerOptions);
+
+        document.querySelectorAll('.fade-in-on-scroll').forEach(el => {
+            observer.observe(el);
+        });
+
+        // Add sparkle particles on mouse move
+        let sparkleCount = 0;
+        document.addEventListener('mousemove', (e) => {
+            if (sparkleCount < 5 && Math.random() > 0.95) {
+                sparkleCount++;
+                const sparkle = document.createElement('div');
+                sparkle.className = 'sparkle';
+                sparkle.style.left = e.clientX + 'px';
+                sparkle.style.top = e.clientY + 'px';
+                sparkle.style.animation = 'sparkle 1s ease-out forwards';
+                document.body.appendChild(sparkle);
+                
+                setTimeout(() => {
+                    sparkle.remove();
+                    sparkleCount--;
+                }, 1000);
+            }
+        });
+
+        // Handle form submissions
+        function handleFormSubmit(formId, messageId) {
+            const form = document.getElementById(formId);
+            const messageDiv = document.getElementById(messageId);
+            
+            if (!form || !messageDiv) return;
+            
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                
+                const formData = new FormData(form);
+                const submitButton = form.querySelector('button[type="submit"]');
+                const originalText = submitButton.textContent;
+                
+                // Disable button and show loading state
+                submitButton.disabled = true;
+                submitButton.textContent = 'Submitting...';
+                messageDiv.classList.add('hidden');
+                
+                try {
+                    const response = await fetch(form.action, {
+                        method: 'POST',
+                        body: formData,
+                        headers: {
+                            'Accept': 'application/json'
+                        }
+                    });
+                    
+                    if (response.ok) {
+                        messageDiv.textContent = 'Thanks! We\'ll be in touch soon.';
+                        messageDiv.className = 'mt-4 text-center text-emerald-600 font-medium';
+                        form.reset();
+                    } else {
+                        throw new Error('Submission failed');
+                    }
+                } catch (error) {
+                    messageDiv.textContent = 'Something went wrong. Please try again.';
+                    messageDiv.className = 'mt-4 text-center text-red-600 font-medium';
+                } finally {
+                    submitButton.disabled = false;
+                    submitButton.textContent = originalText;
+                    messageDiv.classList.remove('hidden');
+                }
+            });
+        }
+        
+        // Initialize form handlers
+        handleFormSubmit('hero-form', 'hero-form-message');
+        handleFormSubmit('cta-form', 'cta-form-message');
+    </script>
+</body>
+</html>
