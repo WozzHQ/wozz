@@ -40,4 +40,4 @@ The Pro version (coming soon) will:
 - Give you a 100% accurate dollar-impact report inside your PRs.
 - Provide AI-generated fixes that actually balance cost, data, and memory.
 
-Sign up for the Pro Beta at [wozz.com](https://wozz.com)
+Sign up for the Pro Beta at [wozz.com](https://wozz.io)
