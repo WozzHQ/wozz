@@ -144,8 +144,8 @@
                     <span class="text-2xl font-bold gradient-text">wozz</span>
                 </div>
                 <div class="flex items-center gap-6">
-                    <a href="airbyte-story.html" class="text-gray-700 hover:text-gray-900 font-medium transition-colors duration-200">
-                        Blog
+                    <a href="how-it-works.html" class="text-gray-700 hover:text-gray-900 font-medium transition-colors duration-200">
+                        How It Works
                     </a>
                 </div>
             </div>
@@ -156,11 +156,11 @@
     <section class="relative overflow-hidden pt-32 pb-40 px-4 sm:px-6 lg:px-8">
         <div class="max-w-5xl mx-auto text-center relative z-10">
             <h1 class="text-6xl sm:text-7xl lg:text-8xl font-bold mb-8 leading-tight animate-fade-in-up">
-                That $10,000 AWS bill<br>
-                <span class="gradient-text">wasn't your fault.</span>
+                That $10,000 Bill<br>
+                <span class="gradient-text">Wasn't a "Bug"...</span>
             </h1>
             <h2 class="text-2xl sm:text-3xl lg:text-4xl font-light text-gray-600 mb-16 animate-fade-in-delay">
-                It was a 14x cost bug on line 91.
+                It Was a Bad Simulation.
             </h2>
             <form id="hero-form" class="flex flex-col sm:flex-row gap-4 max-w-lg mx-auto animate-fade-in-delay" action="https://formspree.io/f/xovyqpvg" method="POST">
                 <input 
@@ -192,8 +192,11 @@
                 <span class="gradient-text">Start Finding the Bug.</span>
             </h3>
             <div class="bg-white rounded-3xl p-12 shadow-xl border border-gray-100 card-hover">
+                <p class="text-xl sm:text-2xl text-gray-700 leading-relaxed text-center font-light mb-6">
+                    Current code linters (like SonarQube) are <span class="font-semibold text-gray-900">'cost-blind.'</span> FinOps tools (like Finout) are <span class="font-semibold text-gray-900">'code-blind.'</span> Neither can simulate the true dollar impact of your application code.
+                </p>
                 <p class="text-xl sm:text-2xl text-gray-700 leading-relaxed text-center font-light">
-                    Current FinOps tools are <span class="font-semibold text-gray-900">'Accountants'</span>—they just show you the bill after the money is gone. They tell you 'S3 is expensive' but not why. <span class="font-semibold gradient-text">Wozz is a 'Detective'</span> that finds the exact line of code that's costing you.
+                    <span class="font-semibold gradient-text">Wozz is the first "Cloud Cost Simulator"</span> that finds the complex trade-offs (API calls vs. data transfer vs. memory) that really cause 'horror story' bills.
                 </p>
             </div>
         </div>
@@ -228,7 +231,7 @@
                     <div class="flex items-start gap-4 mb-6">
                         <span class="text-3xl animate-bounce">🚨</span>
                         <div class="flex-1">
-                            <div class="font-bold text-2xl text-red-500 mb-4">Cost Bug Found!</div>
+                            <div class="font-bold text-2xl text-red-500 mb-4">Cost Simulation Report</div>
                             <div class="space-y-3 text-gray-700 mb-6 text-lg">
                                 <div>
                                     <span class="text-gray-500 font-medium">File:</span> 
@@ -240,36 +243,19 @@
                                 </div>
                                 <div class="pt-2">
                                     <span class="text-gray-500 font-medium">Issue:</span> 
-                                    <span class="ml-2">Found <code class="bg-emerald-50 text-emerald-700 px-2 py-1 rounded font-mono text-sm border border-emerald-200">get_object</code> call inside a while loop. This N+1 pattern can cause a <span class="text-red-500 font-bold text-xl">14x cost multiplier</span> on S3 GET requests.</span>
+                                    <span class="ml-2">N+1 <code class="bg-emerald-50 text-emerald-700 px-2 py-1 rounded font-mono text-sm border border-emerald-200">get_object</code> call.</span>
+                                </div>
+                                <div class="pt-2">
+                                    <span class="text-gray-500 font-medium">Simulation:</span> 
+                                    <span class="ml-2">This pattern will generate <span class="text-red-500 font-bold text-xl">4.5x more API calls</span> and, with data transfer, will be <span class="text-red-500 font-bold text-xl">$14.82 more expensive</span> for every 10,000 runs.</span>
                                 </div>
                             </div>
                             <a href="#" class="inline-block px-6 py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white font-semibold rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105">
-                                Click here to see the real-time cost impact & AI-generated fix →
+                                Click for full report & AI-generated fix →
                             </a>
                         </div>
                     </div>
                 </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Social Proof Section -->
-    <section class="py-32 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-gray-50 to-white">
-        <div class="max-w-5xl mx-auto fade-in-on-scroll">
-            <h3 class="text-4xl sm:text-5xl font-bold mb-12 text-center">
-                It's a <span class="gradient-text">Real Problem.</span>
-            </h3>
-            <div class="bg-white rounded-3xl p-12 sm:p-16 shadow-xl border border-gray-100 card-hover">
-                <div class="relative">
-                    <div class="absolute -top-4 -left-4 text-6xl text-emerald-100">"</div>
-                    <p class="text-2xl sm:text-3xl text-gray-700 leading-relaxed italic mb-6 relative z-10 font-light">
-                        We used Wozz to scan Airbyte's S3 connector and found a 14x get_object loop. For a user processing 10,000 files, that's 140,000 API calls instead of 10,000.
-                    </p>
-                    <div class="absolute -bottom-4 -right-4 text-6xl text-emerald-100 rotate-180">"</div>
-                </div>
-                <p class="text-xl text-emerald-600 font-bold mt-8 text-center">
-                    — The Wozz Team (from our open-source audit of Airbyte)
-                </p>
             </div>
         </div>
     </section>
