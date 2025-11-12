@@ -17,7 +17,7 @@ jobs:
       
       - name: Run wozz
         id: linter
-        uses: ./
+        uses: WozzHQ/wozz@main
         continue-on-error: true
       
       - name: Post PR Comment
@@ -37,6 +37,6 @@ jobs:
 
             These *might* be harmless, or they *might* be $10,000/mo bugs.
             
-            To find out, visit https://wozz.io to connect your cloud account and see the real-time cost impact.`
+            To find out, visit https://wozz.com to connect your cloud account and see the real-time cost impact.`
             })
 

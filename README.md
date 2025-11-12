@@ -1,112 +1,43 @@
-# wozz
+# Wozz: The Cloud Cost Simulation Engine
 
-A free GitHub Action that finds expensive "cloud cost bugs" (like N+1 API calls) in your Python code before you merge.
+Wozz is an open-source, extensible engine that finds expensive "cost anti-patterns" in your Python code.
 
-## What It Does
+## This is Not Another Naive Linter
 
-This linter scans your Python codebase for common anti-patterns that can lead to massive cloud bills:
+Most linters just "find loops." This is naive.
 
-- **N+1 API Calls**: Detects `get_object` or `head_object` calls inside loops that could result in thousands of unnecessary API requests
-- **Real-Time Detection**: Catches these issues in pull requests before they hit production
-- **Zero Configuration**: Just add the workflow file and you're protected
+A real cloud cost bug is a complex trade-off between API calls, data transfer, and memory. A simple linter can't tell you the dollar impact of your code.
 
-## Example Bug
-
-```python
-# This could cost you $10,000/month in API calls!
-for file_name in files:
-    response = s3_client.get_object(Bucket='my-bucket', Key=file_name)
-    process(response)
-```
-
-## Usage
-
-### Step 1: Add the Workflow File
-
-Create a file at `.github/workflows/cost-linter.yml` in your repository:
-
-```yaml
-name: wozz
-
-on:
-  pull_request:
-    branches: [ main, master ]
-
-jobs:
-  cost-lint:
-    runs-on: ubuntu-latest
-    permissions:
-      pull-requests: write
-      contents: read
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
-      - name: Run wozz
-        id: linter
-        uses: YOUR-ORG/cost-bug-linter@main
-        continue-on-error: true
-      
-      - name: Post PR Comment
-        if: steps.linter.outcome == 'failure'
-        uses: actions/github-script@v6
-        with:
-          script: |
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: `### 🚨 wozz Found Issues!
-            
-            Our linter found potential cloud cost bugs in this PR.
-            
-            These *might* be harmless, or they *might* be $10,000/mo bugs.
-            
-            Review the "Run wozz" step above for details.
-            
-            To see the real-time cost impact of these patterns, upgrade to our Pro plan.`
-            })
-```
-
-### Step 2: Create a Pull Request
-
-Once the workflow is added, every pull request will be automatically scanned for cost bugs by wozz. If any are found, you'll see:
-
-1. A failed check on your PR
-2. An automatic comment explaining what was found
-3. Details in the workflow logs showing exact line numbers
-
-## Detected Patterns
-
-Currently detects:
-
-- **[COST-001]**: `get_object` or `head_object` calls inside `for` or `while` loops
-
-More patterns coming soon!
-
-## Requirements
-
-- Python 3.x in your repository
-- GitHub Actions enabled
+Wozz is a simulation engine. It's a pluggable rule system that ingests code + context (like real-time cloud prices) to give you a true dollar-impact estimate, not just a warning.
 
 ## How It Works
 
-The linter uses Python's Abstract Syntax Tree (AST) module to parse your code and detect expensive patterns without executing it. It's fast, safe, and works on any Python codebase.
+Wozz parses your code into an Abstract Syntax Tree (AST) and runs it against a set of rules.
 
-## Local Usage
+**Rule**: `NPlusOneAPICallRule`
 
-You can also run the linter locally:
+**Context**: `{"aws.pricing.data_transfer_out": $0.09/GB}`
+
+**Finding**: `[HIGH] $0.0913/call - L28: N+1 API call in loop`
+
+## Usage
+
+This is the free, open-source engine.
 
 ```bash
-python3 cost_bug_finder.py file1.py file2.py ...
+# Run locally
+python3 cost_bug_finder.py /path/to/your/code
 ```
 
-## License
+## The Wozz Pro (Coming Soon)
 
-MIT
+The free engine is powerful. The SaaS app is the "brain."
 
-## Support
+The Pro version (coming soon) will:
 
-Found an issue? Open a GitHub issue or reach out to our team.
+- Connect to your AWS/GCP account (read-only).
+- Feed your real, live pricing into the Wozz engine.
+- Give you a 100% accurate dollar-impact report inside your PRs.
+- Provide AI-generated fixes that actually balance cost, data, and memory.
 
+Sign up for the Pro Beta at [wozz.com](https://wozz.com)
