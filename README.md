@@ -1,96 +1,55 @@
-# Wozz - Kubernetes Cost Optimization Platform
+# Wozz - Agentless Kubernetes Cost Auditor
 
-**Prevent infrastructure waste BEFORE deployment. Like spell-check for infrastructure costs.**
+**Find wasted resources in your Kubernetes cluster in 15 minutes. No agent installation required.**
 
-## 🎯 What is Wozz?
+Most Kubernetes clusters over-provision CPU and Memory by 40-60%. Existing tools (Kubecost, CastAI) require installing heavy agents, which triggers long security reviews.
 
-Wozz is a two-phase Kubernetes cost optimization platform:
-
-**Phase 1: Live Cluster Auditing** (Available Now)
-- Run `wozz-audit.sh` to scan your cluster
-- Get detailed waste analysis
-- Manual consulting to implement fixes
-
-**Phase 2: Shift-Left Prevention** (Coming Soon)
-- CLI integrates into CI/CD
-- Blocks wasteful deployments before production
-- Continuous cost optimization
+**Wozz is different.** It is a lightweight Bash script that runs locally on your machine, using your existing `kubectl` credentials to identify the gap between *Requested Resources* and *Actual Usage*.
 
 ## 🚀 Quick Start
 
-### Audit Your Cluster (Phase 1)
+### 1. Run the Audit
+
+No installation required. Uses standard `kubectl` commands.
 
 ```bash
-# Download and run the audit script
-curl -O https://raw.githubusercontent.com/WozzHQ/wozz/main/scripts/wozz-audit.sh
-bash wozz-audit.sh
+curl -sL https://raw.githubusercontent.com/WozzHQ/wozz/main/scripts/wozz-audit.sh | bash
 ```
 
-This creates: `wozz-audit-TIMESTAMP.tar.gz`
+### 2. Get Your Report
 
-**Email to:** audit@wozz.io
+The script generates an anonymized `.tar.gz` file. Email this file to `support@wozz.io` to receive your Savings Report.
 
-**What it collects:**
-- ✅ Resource requests/limits configurations
-- ✅ Current usage metrics (if metrics-server available)
-- ✅ Node capacity information
-- ✅ Storage allocations
+## 🛡️ Security & Privacy
 
-**What it DOESN'T collect:**
-- ❌ Secrets or sensitive data
-- ❌ Application code
-- ❌ Environment variables
-- ❌ Logs
+We designed this to be "Paranoid-Proof."
 
-### CLI Usage (Phase 2 - Coming Soon)
+### What it Collects ✅
 
-Phase 2 will include a TypeScript CLI and Go agent for CI/CD integration. Coming Q2 2025.
+- Resource Requests & Limits (CPU/Memory)
+- Current Usage Metrics (`kubectl top`)
+- Node Capacity & Instance Types
+- Storage (PV/PVC) sizes
 
-## 📊 How It Works
+### What it DOES NOT Collect ❌
 
-### Phase 1: The Audit (Manual Analysis)
+- **No Secrets:** We strip all Secrets, ConfigMaps, and Env Vars.
+- **No Source Code:** We never look at application logic.
+- **No Identifiers:** Pod names, Namespaces, and Labels are hashed locally before export.
 
-```
-Your Cluster → wozz-audit.sh → Anonymized Data →
-Email to Wozz → Manual Analysis → Detailed Report →
-Consulting Engagement
-```
+You can verify the code in `scripts/wozz-audit.sh` or run our verification script to prove anonymity before sending.
 
-### Phase 2: The Platform (Automated Prevention)
+## 📊 Example Findings
 
-```
-Developer writes YAML → Git Push → CI/CD runs wozz check →
-wozz CLI calls Agent → Agent queries Prometheus →
-Agent returns risk score →
-✅ Safe = Deploy | ❌ Wasteful = Block PR
-```
+Common issues this tool detects:
 
-## 🏗️ Architecture
-
-### Phase 1
-- **Bash Script**: Collects cluster data locally
-- **Python Analyzer**: Generates preliminary findings
-- **Manual Service**: Expert analysis & recommendations
-
-### Phase 2
-- **TypeScript CLI**: Developer-facing tool (runs in CI/CD)
-- **Go Agent**: In-cluster service (queries Prometheus)
-- **Prometheus**: Metrics source (historical usage data)
-
-## 💰 Pricing
-
-### Phase 1: Consulting
-- **Free Audit**: Run script, email results, get report
-- **Implementation**: $10K flat OR 15% of first-year savings
-- **Guarantee**: Find 3x our fee in savings or free
-
-### Phase 2: SaaS (Coming Q2 2025)
-- **Free**: CLI with basic checks
-- **Starter**: $299/mo - 1-5 clusters, benchmark data
-- **Pro**: $999/mo - Unlimited clusters, API access
-- **Enterprise**: $5K+/mo - SSO, support, SLA
+- **Fear-Based Limits:** Developers requesting 8GB RAM for apps using 500MB.
+- **Orphaned Resources:** Load balancers and PVCs attached to dead workloads.
+- **Bin-Packing Inefficiency:** Nodes that are 20% utilized but cannot accept new pods.
 
 ## 🛠️ Development
+
+If you want to inspect the code or run it manually:
 
 ```bash
 # Clone repo
@@ -104,43 +63,10 @@ bash scripts/wozz-audit.sh
 ./scripts/verify-anonymization.sh
 ```
 
-## 📚 Documentation
-
-- [Quick Start Guide](scripts/README.md)
-- [Testing Guide](test-fixtures/README.md)
-
-## 🤝 Contributing
-
-We welcome contributions! Please open an issue or submit a pull request.
-
-## 📄 License
-
-MIT License - see [LICENSE](LICENSE)
-
-## 🔗 Links
-
-- **Website**: https://wozz.io
-- **Documentation**: https://docs.wozz.io
-- **Blog**: https://wozz.io/blog
-- **Twitter**: [@wozz_io](https://twitter.com/wozz_io)
-
 ## 🆘 Support
 
-- **Email**: support@wozz.io
-- **Audit Submissions**: audit@wozz.io
-- **Slack**: [Join our community](https://wozz.io/slack)
-- **GitHub Issues**: [Report bugs](https://github.com/WozzHQ/wozz/issues)
+- **Email:** support@wozz.io
+- **Issues:** [Open a GitHub Issue](https://github.com/WozzHQ/wozz/issues)
+- **License:** MIT
 
-## 🎯 The Problem We Solve
-
-**Every Kubernetes cluster wastes 30-50% of its budget on:**
-- Over-provisioned memory (limits 4x higher than usage)
-- Unused CPU capacity
-- Missing resource requests (scheduling inefficiency)
-- Idle nodes and storage
-
-**Wozz finds this waste BEFORE it costs you money.**
-
----
-
-**Built with ❤️ for the Kubernetes community**
+Built for the Kubernetes Community.
