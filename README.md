@@ -23,8 +23,7 @@ Wozz is a two-phase Kubernetes cost optimization platform:
 ```bash
 # Download and run the audit script
 curl -O https://raw.githubusercontent.com/WozzHQ/wozz/main/scripts/wozz-audit.sh
-chmod +x wozz-audit.sh
-./wozz-audit.sh
+bash wozz-audit.sh
 ```
 
 This creates: `wozz-audit-TIMESTAMP.tar.gz`
@@ -99,8 +98,7 @@ git clone https://github.com/WozzHQ/wozz.git
 cd wozz
 
 # Run audit script
-chmod +x scripts/wozz-audit.sh
-./scripts/wozz-audit.sh
+bash scripts/wozz-audit.sh
 
 # Test anonymization
 ./scripts/verify-anonymization.sh
