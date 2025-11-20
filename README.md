@@ -1,92 +1,148 @@
-# Wozz Landing Page
+# Wozz - Kubernetes Cost Optimization Platform
 
-A beautiful, modern landing page for Wozz - a tool that finds expensive cloud cost bugs in your code before they hit production.
+**Prevent infrastructure waste BEFORE deployment. Like spell-check for infrastructure costs.**
 
-## Features
+## 🎯 What is Wozz?
 
-- 🎨 Clean, Apple-inspired design with Wizard of Oz theme
-- 📱 Fully responsive
-- ✨ Smooth animations and interactions
-- 📝 Blog post about finding cost bugs in Airbyte
-- 📧 Email collection forms (via Formspree)
+Wozz is a two-phase Kubernetes cost optimization platform:
 
-## Setup
+**Phase 1: Live Cluster Auditing** (Available Now)
+- Run `wozz-audit.sh` to scan your cluster
+- Get detailed waste analysis
+- Manual consulting to implement fixes
 
-### 1. Formspree Configuration
+**Phase 2: Shift-Left Prevention** (Coming Soon)
+- CLI integrates into CI/CD
+- Blocks wasteful deployments before production
+- Continuous cost optimization
 
-The forms use Formspree for email collection. You need to:
+## 🚀 Quick Start
 
-1. Go to [Formspree.io](https://formspree.io) and create a free account
-2. Create a new form
-3. Copy your form ID (it will look like `xqwerty123`)
-4. Replace `YOUR_FORM_ID` in both HTML files with your actual Formspree form ID
-
-Search for `YOUR_FORM_ID` in:
-- `index.html` (appears twice - hero form and CTA form)
-- `airbyte-story.html` (if you add forms there)
-
-### 2. Deploy to Vercel
-
-#### Option A: Deploy via GitHub (Recommended)
-
-1. Push this repository to GitHub:
-   ```bash
-   git init
-   git add .
-   git commit -m "Initial commit"
-   git branch -M main
-   git remote add origin https://github.com/WozzHQ/wozz-app.git
-   git push -u origin main
-   ```
-
-2. Go to [Vercel](https://vercel.com) and sign in with GitHub
-3. Click "New Project"
-4. Import your `wozz-app` repository
-5. Vercel will auto-detect it's a static site
-6. Click "Deploy"
-
-#### Option B: Deploy via Vercel CLI
+### Audit Your Cluster (Phase 1)
 
 ```bash
-npm i -g vercel
-vercel
+# Download and run the audit script
+curl -O https://raw.githubusercontent.com/WozzHQ/wozz/main/scripts/wozz-audit.sh
+chmod +x wozz-audit.sh
+./wozz-audit.sh
 ```
 
-### 3. Custom Domain (Optional)
+This creates: `wozz-audit-TIMESTAMP.tar.gz`
 
-1. In Vercel dashboard, go to your project settings
-2. Navigate to "Domains"
-3. Add your custom domain (e.g., `wozz.io`)
+**Email to:** audit@wozz.io
 
-## File Structure
+**What it collects:**
+- ✅ Resource requests/limits configurations
+- ✅ Current usage metrics (if metrics-server available)
+- ✅ Node capacity information
+- ✅ Storage allocations
+
+**What it DOESN'T collect:**
+- ❌ Secrets or sensitive data
+- ❌ Application code
+- ❌ Environment variables
+- ❌ Logs
+
+### CLI Usage (Phase 2 - Coming Soon)
+
+Phase 2 will include a TypeScript CLI and Go agent for CI/CD integration. Coming Q2 2025.
+
+## 📊 How It Works
+
+### Phase 1: The Audit (Manual Analysis)
 
 ```
-wozz-app/
-├── index.html              # Main landing page
-├── airbyte-story.html      # Blog post about Airbyte bug
-├── vercel.json             # Vercel configuration
-├── .gitignore              # Git ignore rules
-└── README.md               # This file
+Your Cluster → wozz-audit.sh → Anonymized Data →
+Email to Wozz → Manual Analysis → Detailed Report →
+Consulting Engagement
 ```
 
-## Local Development
+### Phase 2: The Platform (Automated Prevention)
 
-Simply open `index.html` in your browser, or use a local server:
+```
+Developer writes YAML → Git Push → CI/CD runs wozz check →
+wozz CLI calls Agent → Agent queries Prometheus →
+Agent returns risk score →
+✅ Safe = Deploy | ❌ Wasteful = Block PR
+```
+
+## 🏗️ Architecture
+
+### Phase 1
+- **Bash Script**: Collects cluster data locally
+- **Python Analyzer**: Generates preliminary findings
+- **Manual Service**: Expert analysis & recommendations
+
+### Phase 2
+- **TypeScript CLI**: Developer-facing tool (runs in CI/CD)
+- **Go Agent**: In-cluster service (queries Prometheus)
+- **Prometheus**: Metrics source (historical usage data)
+
+## 💰 Pricing
+
+### Phase 1: Consulting
+- **Free Audit**: Run script, email results, get report
+- **Implementation**: $10K flat OR 15% of first-year savings
+- **Guarantee**: Find 3x our fee in savings or free
+
+### Phase 2: SaaS (Coming Q2 2025)
+- **Free**: CLI with basic checks
+- **Starter**: $299/mo - 1-5 clusters, benchmark data
+- **Pro**: $999/mo - Unlimited clusters, API access
+- **Enterprise**: $5K+/mo - SSO, support, SLA
+
+## 🛠️ Development
 
 ```bash
-python3 -m http.server 8000
+# Clone repo
+git clone https://github.com/WozzHQ/wozz.git
+cd wozz
+
+# Run audit script
+chmod +x scripts/wozz-audit.sh
+./scripts/wozz-audit.sh
+
+# Test anonymization
+./scripts/verify-anonymization.sh
 ```
 
-Then visit `http://localhost:8000`
+## 📚 Documentation
 
-## Security
+- [Quick Start Guide](scripts/README.md)
+- [Testing Guide](test-fixtures/README.md)
 
-- All external links use HTTPS
-- Security headers configured in `vercel.json`
-- No hardcoded credentials or API keys
-- Forms use Formspree's secure endpoint
+## 🤝 Contributing
 
-## License
+We welcome contributions! Please open an issue or submit a pull request.
 
-Copyright © 2025 Wozz Inc. All rights reserved.
+## 📄 License
 
+MIT License - see [LICENSE](LICENSE)
+
+## 🔗 Links
+
+- **Website**: https://wozz.io
+- **Documentation**: https://docs.wozz.io
+- **Blog**: https://wozz.io/blog
+- **Twitter**: [@wozz_io](https://twitter.com/wozz_io)
+
+## 🆘 Support
+
+- **Email**: support@wozz.io
+- **Audit Submissions**: audit@wozz.io
+- **Slack**: [Join our community](https://wozz.io/slack)
+- **GitHub Issues**: [Report bugs](https://github.com/WozzHQ/wozz/issues)
+
+## 🎯 The Problem We Solve
+
+**Every Kubernetes cluster wastes 30-50% of its budget on:**
+- Over-provisioned memory (limits 4x higher than usage)
+- Unused CPU capacity
+- Missing resource requests (scheduling inefficiency)
+- Idle nodes and storage
+
+**Wozz finds this waste BEFORE it costs you money.**
+
+---
+
+**Built with ❤️ for the Kubernetes community**

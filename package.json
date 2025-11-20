@@ -1,18 +1,59 @@
 {
-  "name": "wozz-app",
-  "version": "1.0.0",
-  "description": "Landing page for Wozz - Find $10,000 Cloud Bugs in Your Code",
+  "name": "@wozz/k8s-audit",
+  "version": "0.1.0",
+  "description": "Find resource waste in Kubernetes clusters - prevent infrastructure waste before deployment",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "wozz": "./bin/run"
+  },
+  "files": [
+    "/bin",
+    "/dist",
+    "/scripts",
+    "/oclif.manifest.json"
+  ],
   "scripts": {
-    "dev": "python3 -m http.server 8000",
-    "start": "python3 -m http.server 8000"
+    "audit:run": "./scripts/wozz-audit.sh",
+    "audit:analyze": "python3 scripts/analyze-audit.py",
+    "audit:verify": "./scripts/verify-anonymization.sh"
   },
   "keywords": [
     "wozz",
-    "cloud-cost",
+    "kubernetes",
+    "k8s",
+    "cost-optimization",
     "finops",
-    "landing-page"
+    "audit",
+    "resource-waste",
+    "shift-left"
   ],
   "author": "Wozz Team",
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "@oclif/core": "^4.0.34",
+    "axios": "^1.6.0",
+    "chalk": "^4.1.2",
+    "cli-table3": "^0.6.5",
+    "js-yaml": "^4.1.0",
+    "oclif": "^4.16.15",
+    "ora": "^5.4.1",
+    "uuid": "^11.0.3"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^22.10.2",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.2",
+    "vitest": "^1.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "oclif": {
+    "bin": "wozz",
+    "dirname": "wozz",
+    "commands": "./dist/commands",
+    "topicSeparator": " "
+  }
 }
-

@@ -1,36 +1,75 @@
 # Dependencies
 node_modules/
-.pnp
-.pnp.js
+package-lock.json
+
+# Build outputs
+dist/
+*.log
+.oclif.manifest.json
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# IDE
+.DS_Store
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
 
 # Testing
 coverage/
+.nyc_output/
+wozz-audit-*/
+*.tar.gz
 
-# Production
-dist/
-build/
+# Old AWS/Terraform code (archived, not needed)
+src/
+bin/
+tsconfig.json
 
-# Misc
-.DS_Store
-*.pem
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+# Planning & Internal Documentation (KEEP PRIVATE)
+# These contain business strategy, pricing, internal notes
+ANALYSIS_AND_GAMEPLAN.md
+ARCHITECTURE_DIAGRAM.md
+BUG_FIX_VERIFIED.md
+CRITICAL_SECURITY_FIX.md
+CURRENT_STATUS_AND_NEXT_STEPS.md
+FINAL_IMPLEMENTATION_SPEC.md
+GITHUB_PUBLISH_GUIDE.md
+GITHUB_READY.md
+CLEANUP_AND_PUBLISH.md
+FINAL_PUBLISH_SUMMARY.md
+PUBLISH_NOW.md
+README_FOR_GITHUB.md
+.cursorrules
+IMPLEMENTATION_COMPLETE.md
+IMPLEMENTATION_READY.md
+IMPLEMENTATION_ROADMAP.md
+IMPLEMENTATION_STATUS.md
+PLANNING_COMPLETE.md
+PRE_LAUNCH_CHECKLIST.md
+PRODUCT_STATUS.md
+PIVOT_SUMMARY.md
+QUICK_REFERENCE.md
+START_HERE.md
+STATUS.md
+SETUP.md
 
-# Logs
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-lerna-debug.log*
+# Internal planning docs
+docs/K8S_PIVOT_PLAN.md
+docs/FILE_AUDIT.md
+docs/IMPLEMENTATION_PLAN.md
+docs/BUSINESS_CONTEXT.md
+docs/TECHNICAL_SPEC.md
+docs/DEVELOPMENT_STRATEGY.md
 
-# Editor directories and files
-.idea
-.vscode
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
-
+# Keep these public (user-facing)
+# README.md
+# scripts/
+# test-fixtures/
+# LICENSE
+# package.json
