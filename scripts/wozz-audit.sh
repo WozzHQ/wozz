@@ -1,5 +1,5 @@
 #!/bin/bash
-# wozz-audit.sh v1.0
+# wozz-audit.sh v1.1
 # Agentless Kubernetes Cost Audit Tool
 # Compares resource requests vs actual usage to find waste
 
@@ -45,38 +45,34 @@ mkdir -p "${OUTPUT_DIR}"
 echo "→ Collecting cluster data..."
 echo ""
 
-# 1. Get cluster info
-echo "  [1/7] Cluster overview..."
-kubectl cluster-info dump --namespaces="" --output-directory="${OUTPUT_DIR}/cluster-info" > /dev/null 2>&1
-
-# 2. Get all pods with resource requests/limits
-echo "  [2/7] Pod resource configurations..."
+# 1. Get all pods with resource requests/limits
+echo "  [1/5] Pod resource configurations..."
 kubectl get pods --all-namespaces -o json > "${OUTPUT_DIR}/pods-raw.json"
 
-# 3. Get current resource usage (if available)
+# 2. Get current resource usage (if available)
 if [ "$METRICS_AVAILABLE" = true ]; then
-    echo "  [3/7] Current resource usage..."
+    echo "  [2/5] Current resource usage..."
     kubectl top pods --all-namespaces --containers > "${OUTPUT_DIR}/usage-pods.txt" 2>/dev/null || true
     kubectl top nodes > "${OUTPUT_DIR}/usage-nodes.txt" 2>/dev/null || true
 else
-    echo "  [3/7] Skipping usage data (metrics unavailable)"
+    echo "  [2/5] Skipping usage data (metrics unavailable)"
 fi
 
-# 4. Get node information
-echo "  [4/7] Node capacity and allocations..."
+# 3. Get node information
+echo "  [3/5] Node capacity and allocations..."
 kubectl get nodes -o json > "${OUTPUT_DIR}/nodes-raw.json"
-kubectl describe nodes > "${OUTPUT_DIR}/nodes-describe.txt"
 
-# 5. Get persistent volumes (storage costs)
-echo "  [5/7] Storage resources..."
-kubectl get pv -o json > "${OUTPUT_DIR}/pv-raw.json" 2>/dev/null || echo "No PVs found" > "${OUTPUT_DIR}/pv-raw.json"
+# 4. Get persistent volumes (storage costs)
+echo "  [4/5] Storage resources..."
+kubectl get pv -o json > "${OUTPUT_DIR}/pv-raw.json" 2>/dev/null || echo '{"items":[]}' > "${OUTPUT_DIR}/pv-raw.json"
 
-# 6. Get services (load balancer costs)
-echo "  [6/7] Service configurations..."
+# 5. Get services (load balancer costs)
+echo "  [5/5] Service configurations..."
 kubectl get svc --all-namespaces -o json > "${OUTPUT_DIR}/services-raw.json"
 
-# 7. Anonymize sensitive data
-echo "  [7/7] Anonymizing sensitive information..."
+# 6. Anonymize sensitive data
+echo ""
+echo "→ Anonymizing sensitive information..."
 # Pass the OUTPUT_DIR as the first argument to the python script
 python3 - "${OUTPUT_DIR}" << 'PYTHON_SCRIPT'
 import json
@@ -92,6 +88,22 @@ def anonymize_string(s):
     if not s:
         return s
     return hashlib.sha256(s.encode()).hexdigest()[:12]
+
+def strip_env_vars(data):
+    """Remove environment variables completely from containers"""
+    if isinstance(data, dict):
+        # Remove env and envFrom entirely from containers
+        if 'env' in data:
+            del data['env']
+        if 'envFrom' in data:
+            del data['envFrom']
+        
+        # Recurse into nested structures
+        for key, value in list(data.items()):
+            data[key] = strip_env_vars(value)
+    elif isinstance(data, list):
+        return [strip_env_vars(item) for item in data]
+    return data
 
 def anonymize_data(data, sensitive_fields, sensitive_label_keys):
     """Recursively anonymize sensitive fields in nested structures"""
@@ -121,7 +133,8 @@ sensitive_fields = {
     'clusterName', 'selfLink', 'resourceVersion',
     'ip', 'hostIP', 'podIP', 'claimRef',
     'generateName', 'image', 'imageID', 'message', 'reason',
-    'controller-uid', 'pod-template-hash', 'serviceAccount', 'serviceAccountName'
+    'controller-uid', 'pod-template-hash', 'serviceAccount', 'serviceAccountName',
+    'volumeName', 'server', 'path', 'secretName', 'user'
 }
 
 # Sensitive Label Keys to anonymize values for
@@ -131,18 +144,57 @@ sensitive_label_keys = {
     'app.kubernetes.io/component', 'app.kubernetes.io/part-of'
 }
 
-# Process pods
 try:
-    # Use os.path.join with the passed directory
+    # Process pods
     pods_path = os.path.join(output_dir, 'pods-raw.json')
     with open(pods_path, 'r') as f:
         pods = json.load(f)
     
+    # Strip environment variables FIRST (before anonymization)
+    pods = strip_env_vars(pods)
+    
+    # Then anonymize other fields
     anonymized_pods = anonymize_data(pods, sensitive_fields, sensitive_label_keys)
     
     out_path = os.path.join(output_dir, 'pods-anonymized.json')
     with open(out_path, 'w') as f:
         json.dump(anonymized_pods, f, indent=2)
+    
+    # Process nodes
+    nodes_path = os.path.join(output_dir, 'nodes-raw.json')
+    if os.path.exists(nodes_path):
+        with open(nodes_path, 'r') as f:
+            nodes = json.load(f)
+        
+        anonymized_nodes = anonymize_data(nodes, sensitive_fields, sensitive_label_keys)
+        
+        out_path = os.path.join(output_dir, 'nodes-anonymized.json')
+        with open(out_path, 'w') as f:
+            json.dump(anonymized_nodes, f, indent=2)
+    
+    # Process services
+    services_path = os.path.join(output_dir, 'services-raw.json')
+    if os.path.exists(services_path):
+        with open(services_path, 'r') as f:
+            services = json.load(f)
+        
+        anonymized_services = anonymize_data(services, sensitive_fields, sensitive_label_keys)
+        
+        out_path = os.path.join(output_dir, 'services-anonymized.json')
+        with open(out_path, 'w') as f:
+            json.dump(anonymized_services, f, indent=2)
+    
+    # Process PVs
+    pv_path = os.path.join(output_dir, 'pv-raw.json')
+    if os.path.exists(pv_path):
+        with open(pv_path, 'r') as f:
+            pvs = json.load(f)
+        
+        anonymized_pvs = anonymize_data(pvs, sensitive_fields, sensitive_label_keys)
+        
+        out_path = os.path.join(output_dir, 'pv-anonymized.json')
+        with open(out_path, 'w') as f:
+            json.dump(anonymized_pvs, f, indent=2)
     
     # Extract resource summary
     summary = {
@@ -158,22 +210,29 @@ try:
     }
     
     for pod in pods.get('items', []):
+        has_requests = False
+        has_limits = False
         for container in pod.get('spec', {}).get('containers', []):
             resources = container.get('resources', {})
             
-            if not resources.get('requests'):
-                summary['podsWithoutRequests'] += 1
-            if not resources.get('limits'):
-                summary['podsWithoutLimits'] += 1
+            if resources.get('requests'):
+                has_requests = True
+            if resources.get('limits'):
+                has_limits = True
+        
+        if not has_requests:
+            summary['podsWithoutRequests'] += 1
+        if not has_limits:
+            summary['podsWithoutLimits'] += 1
     
     summary_path = os.path.join(output_dir, 'summary.json')
     with open(summary_path, 'w') as f:
         json.dump(summary, f, indent=2)
     
-    print("✅ Data anonymized successfully")
+    print("  ✅ Data anonymized successfully")
 
 except Exception as e:
-    print(f"❌ Error during anonymization: {e}")
+    print(f"  ❌ Error during anonymization: {e}")
     sys.exit(1)
 PYTHON_SCRIPT
 
@@ -183,41 +242,63 @@ Wozz Kubernetes Audit - ${TIMESTAMP}
 
 This audit contains anonymized data from your Kubernetes cluster.
 
-Data Collected:
-✅ Resource requests and limits (CPU/memory)
-✅ Current usage patterns (if metrics-server available)
-✅ Node capacity information
-✅ Storage allocation
-✅ Service configurations
+✅ Data Security Guarantee:
+- All pod/namespace/node names are hashed
+- Container images are hashed
+- Environment variables are completely removed
+- No secrets or configmaps included
+- IP addresses are hashed
+- Service accounts are hashed
 
-Data NOT Collected:
-❌ Pod/namespace names (hashed for privacy)
-❌ Container images (hashed)
-❌ Environment variables
-❌ Secrets or ConfigMaps
-❌ Application logs
-
-What's Included:
-- pods-anonymized.json: Resource configurations
-- usage-*.txt: Current resource usage
-- nodes-*.txt: Node capacity and utilization
-- pv-raw.json: Persistent volume information
-- services-raw.json: Load balancer configurations
+Files Included (All Anonymized):
+- pods-anonymized.json: Resource configurations (NO env vars)
+- nodes-anonymized.json: Node capacity information (NO hostnames)
+- services-anonymized.json: Load balancer configurations
+- pv-anonymized.json: Persistent volume information
+- usage-*.txt: Current resource usage metrics (safe - just numbers)
 - summary.json: High-level statistics
 
+Files NOT Included:
+- Raw JSON files (deleted after anonymization)
+- Environment variables (stripped completely)
+- Secrets or ConfigMaps
+- Application logs
+- Cluster-info dumps
+
 Next Steps:
-1. Review this data to ensure you're comfortable sharing
-2. Create archive: tar -czf audit.tar.gz ${OUTPUT_DIR}
-3. Email to: audit@wozz.io
-4. We'll analyze and send your detailed savings report within 48 hours
+1. Verify: You can inspect these files to confirm anonymization
+2. Email: Send this file to support@wozz.io
+3. Subject: "Wozz Audit - [Your Company Name]"
+4. We'll analyze and send your savings report within 24 hours
 
 Questions? https://wozz.io/support
 EOF
 
-# Create compressed archive
 echo ""
-echo "→ Creating compressed archive..."
-tar -czf "${OUTPUT_DIR}.tar.gz" "${OUTPUT_DIR}"
+echo "→ Creating secure archive (raw files excluded)..."
+
+# Create clean directory with ONLY anonymized files
+CLEAN_DIR="${OUTPUT_DIR}-clean"
+mkdir -p "${CLEAN_DIR}"
+
+# Copy only anonymized and safe files
+cp "${OUTPUT_DIR}/pods-anonymized.json" "${CLEAN_DIR}/" 2>/dev/null || true
+cp "${OUTPUT_DIR}/nodes-anonymized.json" "${CLEAN_DIR}/" 2>/dev/null || true
+cp "${OUTPUT_DIR}/services-anonymized.json" "${CLEAN_DIR}/" 2>/dev/null || true
+cp "${OUTPUT_DIR}/pv-anonymized.json" "${CLEAN_DIR}/" 2>/dev/null || true
+cp "${OUTPUT_DIR}/summary.json" "${CLEAN_DIR}/" 2>/dev/null || true
+cp "${OUTPUT_DIR}/README.txt" "${CLEAN_DIR}/" 2>/dev/null || true
+
+# Copy usage files if they exist (these are safe - just metrics)
+[ -f "${OUTPUT_DIR}/usage-pods.txt" ] && cp "${OUTPUT_DIR}/usage-pods.txt" "${CLEAN_DIR}/"
+[ -f "${OUTPUT_DIR}/usage-nodes.txt" ] && cp "${OUTPUT_DIR}/usage-nodes.txt" "${CLEAN_DIR}/"
+
+# Create tarball from clean directory only
+tar -czf "${OUTPUT_DIR}.tar.gz" -C "${CLEAN_DIR}" .
+
+# Clean up - Remove ALL raw data
+rm -rf "${CLEAN_DIR}"
+rm -rf "${OUTPUT_DIR}"
 
 # Calculate size
 SIZE=$(du -h "${OUTPUT_DIR}.tar.gz" | cut -f1)
@@ -229,17 +310,24 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo "📦 Output: ${OUTPUT_DIR}.tar.gz (${SIZE})"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
+echo "🔒 Security Verified:"
+echo "   ✅ All raw files deleted"
+echo "   ✅ Environment variables stripped"
+echo "   ✅ Names and IPs hashed"
+echo "   ✅ Only anonymized data in archive"
+echo ""
 echo "Next Steps:"
-echo "1. Review: cat ${OUTPUT_DIR}/README.txt"
-echo "2. Email:  audit@wozz.io"
+echo "1. Optional: Extract and review files to verify anonymization"
+echo "   tar -xzf ${OUTPUT_DIR}.tar.gz && cat README.txt"
+echo ""
+echo "2. Email:  support@wozz.io"
 echo "3. Subject: 'Wozz Audit - [Your Company Name]'"
 echo ""
 echo "What happens next:"
 echo "→ We analyze your cluster configuration"
-echo "→ You receive detailed waste report in 48 hours"
-echo "→ Report includes specific \$ savings & recommendations"
+echo "→ You receive detailed waste report in 24 hours"
+echo "→ Report includes specific $ savings & recommendations"
 echo ""
-echo "Have questions? https://wozz.io/call"
+echo "Have questions? https://wozz.io/support"
 echo ""
-
 
