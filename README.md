@@ -39,6 +39,8 @@ We designed this to be "Paranoid-Proof."
 
 You can verify the code in `scripts/wozz-audit.sh` or run our verification script to prove anonymity before sending.
 
+**Read our full [Privacy Policy](PRIVACY.md)** for details on data retention, usage, and your rights.
+
 ## 📊 Example Findings
 
 Common issues this tool detects:
@@ -67,6 +69,7 @@ bash scripts/wozz-audit.sh
 
 - **Email:** support@wozz.io
 - **Issues:** [Open a GitHub Issue](https://github.com/WozzHQ/wozz/issues)
+- **Privacy:** [Privacy Policy](PRIVACY.md)
 - **License:** MIT
 
 Built for the Kubernetes Community.
