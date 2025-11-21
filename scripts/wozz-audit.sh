@@ -271,7 +271,12 @@ Next Steps:
 3. Subject: "Wozz Audit - [Your Company Name]"
 4. We'll analyze and send your savings report within 24 hours
 
-Questions? https://wozz.io/support
+Data Privacy:
+- Read our Privacy Policy: https://github.com/WozzHQ/wozz/blob/main/PRIVACY.md
+- Your data is deleted within 30 days of receipt
+- We never sell or share your data with third parties
+
+Questions? support@wozz.io
 EOF
 
 echo ""
