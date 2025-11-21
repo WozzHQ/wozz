@@ -20,7 +20,7 @@ curl -sL https://raw.githubusercontent.com/WozzHQ/wozz/main/scripts/wozz-audit.s
 
 The script generates an anonymized `.tar.gz` file. Email this file to `support@wozz.io` to receive your Savings Report.
 
-## 🛡️ Security & Privacy
+## Security & Privacy
 
 We designed this to be "Paranoid-Proof."
 
@@ -31,7 +31,7 @@ We designed this to be "Paranoid-Proof."
 - Node Capacity & Instance Types
 - Storage (PV/PVC) sizes
 
-### What it DOES NOT Collect ❌
+### What it DOES NOT Collect 
 
 - **No Secrets:** We strip all Secrets, ConfigMaps, and Env Vars.
 - **No Source Code:** We never look at application logic.
@@ -39,7 +39,7 @@ We designed this to be "Paranoid-Proof."
 
 You can verify the code in `scripts/wozz-audit.sh` or run our verification script to prove anonymity before sending.
 
-## 📊 Example Findings
+## Example Findings
 
 Common issues this tool detects:
 
@@ -47,7 +47,7 @@ Common issues this tool detects:
 - **Orphaned Resources:** Load balancers and PVCs attached to dead workloads.
 - **Bin-Packing Inefficiency:** Nodes that are 20% utilized but cannot accept new pods.
 
-## 🛠️ Development
+## Development
 
 If you want to inspect the code or run it manually:
 
