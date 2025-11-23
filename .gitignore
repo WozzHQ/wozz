@@ -73,3 +73,6 @@ docs/DEVELOPMENT_STRATEGY.md
 # test-fixtures/
 # LICENSE
 # package.json
+__pycache__/
+*.pyc
+*.pyo

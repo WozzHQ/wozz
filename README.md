@@ -1,26 +1,81 @@
 # Wozz - Agentless Kubernetes Cost Auditor
 
-**Find wasted resources in your Kubernetes cluster in 15 minutes. No agent installation required.**
+**Find wasted resources in your cluster. No agents. No data uploads.**
 
-Most Kubernetes clusters over-provision CPU and Memory by 40-60%. Existing tools (Kubecost, CastAI) require installing heavy agents, which triggers long security reviews.
+Most Kubernetes clusters over-provision CPU and Memory by 40-60%. Existing tools require installing heavy agents, which triggers long security reviews.
 
-**Wozz is different.** It is a lightweight Bash script that runs locally on your machine, using your existing `kubectl` credentials to identify the gap between *Requested Resources* and *Actual Usage*.
+**Wozz is different.** It's a lightweight Bash script that runs locally, using your existing `kubectl` credentials. You see savings immediately in your terminal.
 
-## 🚀 Quick Start
-
-### 1. Run the Audit
+## Quick Start
 
 No installation required. Uses standard `kubectl` commands.
 
 ```bash
-curl -sL https://raw.githubusercontent.com/WozzHQ/wozz/main/scripts/wozz-audit.sh | bash
+curl -sL wozz.io/audit.sh | bash
 ```
 
-### 2. Get Your Report
+## What You Get
 
-The script generates an anonymized `.tar.gz` file containing ONLY anonymized data (all raw files are deleted after processing). Email this file to `support@wozz.io` to receive your Savings Report.
+- **Immediate cost analysis** in your terminal
+- **Detailed HTML report** with charts (`wozz-report.html`)
+- **Optional:** Web visualizer for interactive analysis (`wozz-audit.json`)
 
-## 🛡️ Security & Privacy
+## How It Works
+
+1. Script runs locally using `kubectl`
+2. Analyzes resource configs vs usage
+3. Calculates waste based on cloud pricing
+4. Shows results immediately
+
+## What It Finds
+
+- Over-provisioned memory/CPU limits
+- Pods without resource requests
+- Orphaned load balancers
+- Unused persistent volumes
+- Underutilized resources
+
+## Privacy
+
+- All analysis happens locally
+- No data leaves your machine
+- Optional: Upload to web analyzer (client-side only)
+- Optional: Email for consulting help
+
+## Example Output
+
+After running the script, you'll see:
+
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+WOZZ AUDIT RESULTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Monthly Waste: $4,250
+Annual Savings: $51,000
+
+Cluster Overview:
+  • Total Pods: 47
+  • Total Nodes: 5
+
+Top Issues:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. Over-Provisioned Memory [HIGH] → $2,800/mo
+2. Orphaned Load Balancers [MEDIUM] → $1,200/mo
+3. Unused Storage [LOW] → $250/mo
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Detailed report: wozz-report.html
+Visualize: https://wozz.io/analyze
+```
+
+## Three Ways to Use Results
+
+1. **Terminal Summary** - Immediate savings breakdown (shown above)
+2. **HTML Report** - Open `wozz-report.html` for detailed charts
+3. **Web Analyzer** - Upload `wozz-audit.json` to https://wozz.io/analyze for interactive visualization
+
+## Security & Privacy
 
 We designed this to be "Paranoid-Proof."
 
@@ -37,19 +92,28 @@ We designed this to be "Paranoid-Proof."
 - **No Source Code:** We never look at application logic.
 - **No Identifiers:** Pod names, Namespaces, and Labels are hashed locally before export.
 
-You can verify the code in `scripts/wozz-audit.sh` or run our verification script to prove anonymity before sending.
+You can verify the code in `scripts/wozz-audit.sh` or run our verification script to prove anonymity.
 
 **Read our full [Privacy Policy](PRIVACY.md)** for details on data retention, usage, and your rights.
 
-## 📊 Example Findings
+## FAQ
 
-Common issues this tool detects:
+**Q: Is this safe?**  
+A: Yes. Script is ~400 lines. Audit it yourself. All analysis happens locally.
 
-- **Fear-Based Limits:** Developers requesting 8GB RAM for apps using 500MB.
-- **Orphaned Resources:** Load balancers and PVCs attached to dead workloads.
-- **Bin-Packing Inefficiency:** Nodes that are 20% utilized but cannot accept new pods.
+**Q: What data is collected?**  
+A: None. Unless you email us for consulting help.
 
-## 🛠️ Development
+**Q: Does it work with EKS/GKE/AKS?**  
+A: Yes. Any cluster with `kubectl` access.
+
+**Q: Do I need metrics-server?**  
+A: Optional. Without it, we analyze configured limits only (no usage-based waste detection).
+
+**Q: How accurate are the cost estimates?**  
+A: We use conservative cloud pricing averages. Actual savings may vary based on your provider and instance types.
+
+## Development
 
 If you want to inspect the code or run it manually:
 
@@ -65,7 +129,7 @@ bash scripts/wozz-audit.sh
 ./scripts/verify-anonymization.sh
 ```
 
-## 🆘 Support
+## Support
 
 - **Email:** support@wozz.io
 - **Issues:** [Open a GitHub Issue](https://github.com/WozzHQ/wozz/issues)

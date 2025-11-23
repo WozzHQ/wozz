@@ -236,6 +236,17 @@ except Exception as e:
     sys.exit(1)
 PYTHON_SCRIPT
 
+# Run cost analysis
+echo ""
+echo "→ Analyzing costs locally..."
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "${SCRIPT_DIR}/generate-report.py" ]; then
+    python3 "${SCRIPT_DIR}/generate-report.py" "${OUTPUT_DIR}"
+else
+    echo "  ⚠️  generate-report.py not found, skipping cost analysis"
+fi
+
 # Create audit summary
 cat > "${OUTPUT_DIR}/README.txt" << EOF
 Wozz Kubernetes Audit - ${TIMESTAMP}
@@ -266,10 +277,10 @@ Files NOT Included:
 - Cluster-info dumps
 
 Next Steps:
-1. Verify: You can inspect these files to confirm anonymization
-2. Email: Send this file to support@wozz.io
-3. Subject: "Wozz Audit - [Your Company Name]"
-4. We'll analyze and send your savings report within 24 hours
+1. View Terminal Summary: Check output above for immediate savings
+2. Open HTML Report: wozz-report.html (if generated)
+3. Upload to Web Analyzer: https://wozz.io/analyze (drag wozz-audit.json)
+4. Optional: Email this archive to support@wozz.io for consulting help
 
 Data Privacy:
 - Read our Privacy Policy: https://github.com/WozzHQ/wozz/blob/main/PRIVACY.md
@@ -312,27 +323,33 @@ echo ""
 echo "✅ Audit Complete!"
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "📦 Output: ${OUTPUT_DIR}.tar.gz (${SIZE})"
+echo "📦 Archive: ${OUTPUT_DIR}.tar.gz (${SIZE})"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
-echo "🔒 Security Verified:"
-echo "   ✅ All raw files deleted"
-echo "   ✅ Environment variables stripped"
-echo "   ✅ Names and IPs hashed"
-echo "   ✅ Only anonymized data in archive"
+echo "Three ways to use your results:"
 echo ""
-echo "Next Steps:"
-echo "1. Optional: Extract and review files to verify anonymization"
-echo "   tar -xzf ${OUTPUT_DIR}.tar.gz && cat README.txt"
+echo "1. Terminal Summary (shown above)"
+echo "   → Immediate savings breakdown"
 echo ""
-echo "2. Email:  support@wozz.io"
-echo "3. Subject: 'Wozz Audit - [Your Company Name]'"
+echo "2. HTML Report"
+if [ -f "wozz-report.html" ]; then
+    echo "   → open wozz-report.html"
+else
+    echo "   → Not generated (check generate-report.py)"
+fi
 echo ""
-echo "What happens next:"
-echo "→ We analyze your cluster configuration"
-echo "→ You receive detailed waste report in 24 hours"
-echo "→ Report includes specific $ savings & recommendations"
+echo "3. Web Analyzer (Interactive Charts)"
+if [ -f "wozz-audit.json" ]; then
+    echo "   → https://wozz.io/analyze"
+    echo "   → Drag wozz-audit.json (100% client-side)"
+else
+    echo "   → JSON not generated (check generate-report.py)"
+fi
 echo ""
-echo "Have questions? https://wozz.io/support"
+echo "Optional: Email for consulting help"
+echo "   → support@wozz.io"
+echo "   → Attach: ${OUTPUT_DIR}.tar.gz"
+echo ""
+echo "🔒 Privacy: All analysis happens locally. No data uploaded."
 echo ""
 
