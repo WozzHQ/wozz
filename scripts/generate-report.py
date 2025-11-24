@@ -139,8 +139,10 @@ def analyze_pods(audit_dir: str) -> List[Dict[str, Any]]:
     pods_without_requests = []
     memory_waste_total = 0.0
     cpu_waste_total = 0.0
-    underutilized_count = 0
-    underutilized_waste = 0.0
+    underutilized_memory_count = 0
+    underutilized_memory_waste = 0.0
+    underutilized_cpu_count = 0
+    underutilized_cpu_waste = 0.0
     
     for pod in pods_data.get('items', []):
         pod_name = pod.get('metadata', {}).get('name', 'unknown')
@@ -195,8 +197,17 @@ def analyze_pods(audit_dir: str) -> List[Dict[str, Any]]:
             
             if cpu_waste > 0:
                 cpu_waste_total += cpu_waste
+                
+                # Determine if waste is from over-provisioning (limit too high) or underutilization (usage too low)
+                is_over_provisioned = cpu_limit > cpu_request * 4 if cpu_request > 0 else False
+                is_underutilized = cpu_usage is not None and cpu_usage > 0 and cpu_usage < cpu_request * 0.2 if cpu_request > 0 else False
+                
+                # Prefer underutilized label if usage data shows underutilization
+                # (even if limit is also high, underutilization is more actionable)
+                finding_type = 'UNDERUTILIZED_CPU' if is_underutilized else 'OVER_PROVISIONED_CPU'
+                
                 findings.append({
-                    'type': 'OVER_PROVISIONED_CPU',
+                    'type': finding_type,
                     'severity': 'HIGH' if cpu_waste > 500 else 'MEDIUM' if cpu_waste > 100 else 'LOW',
                     'pod': pod_name,
                     'namespace': namespace,
@@ -206,16 +217,37 @@ def analyze_pods(audit_dir: str) -> List[Dict[str, Any]]:
                         'request': f"{cpu_request:.2f}",
                         'limit': f"{cpu_limit:.2f}",
                         'usage': f"{cpu_usage:.2f}" if cpu_usage else 'N/A',
+                        'utilizationPercent': f"{(cpu_usage/cpu_request*100):.1f}%" if cpu_usage and cpu_request > 0 else 'N/A',
                         'ratio': f"{cpu_limit/cpu_request:.1f}x" if cpu_request > 0 else 'N/A'
                     }
                 })
+                
+                if is_underutilized:
+                    underutilized_cpu_count += 1
+                    underutilized_cpu_waste += cpu_waste
             
-            # Check underutilization
+            # Check memory underutilization
             if mem_usage and mem_request > 0:
                 if mem_usage < mem_request * 0.2:
-                    underutilized_count += 1
-                    waste = (mem_request - mem_usage * 1.5) * MEMORY_COST_PER_GB_MONTH
-                    underutilized_waste += max(0, waste)
+                    # Only add if not already flagged as over-provisioned
+                    if mem_waste == 0:  # Not caught by over-provisioning check
+                        underutilized_memory_count += 1
+                        waste = (mem_request - mem_usage * 1.5) * MEMORY_COST_PER_GB_MONTH
+                        underutilized_memory_waste += max(0, waste)
+                        
+                        findings.append({
+                            'type': 'UNDERUTILIZED_MEMORY',
+                            'severity': 'MEDIUM' if waste > 100 else 'LOW',
+                            'pod': pod_name,
+                            'namespace': namespace,
+                            'container': container.get('name', 'unknown'),
+                            'monthlySavings': waste,
+                            'details': {
+                                'request': f"{mem_request:.2f}Gi",
+                                'usage': f"{mem_usage:.2f}Gi",
+                                'utilizationPercent': f"{(mem_usage/mem_request*100):.1f}%"
+                            }
+                        })
     
     # Add missing requests finding
     if pods_without_requests:
@@ -688,10 +720,10 @@ def main():
     monthly_waste = sum(f.get('monthlySavings', 0) for f in all_findings)
     annual_savings = monthly_waste * 12
     
-    # Calculate breakdown
+    # Calculate breakdown (include both over-provisioned and underutilized)
     breakdown = {
-        'memory': sum(f.get('monthlySavings', 0) for f in all_findings if f.get('type') == 'OVER_PROVISIONED_MEMORY'),
-        'cpu': sum(f.get('monthlySavings', 0) for f in all_findings if f.get('type') == 'OVER_PROVISIONED_CPU'),
+        'memory': sum(f.get('monthlySavings', 0) for f in all_findings if f.get('type') in ['OVER_PROVISIONED_MEMORY', 'UNDERUTILIZED_MEMORY']),
+        'cpu': sum(f.get('monthlySavings', 0) for f in all_findings if f.get('type') in ['OVER_PROVISIONED_CPU', 'UNDERUTILIZED_CPU']),
         'storage': sum(f.get('monthlySavings', 0) for f in all_findings if f.get('type') == 'UNBOUND_PV'),
         'loadBalancers': sum(f.get('monthlySavings', 0) for f in all_findings if f.get('type') == 'ORPHANED_LB')
     }

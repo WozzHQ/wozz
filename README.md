@@ -29,11 +29,11 @@ curl -sL wozz.io/audit.sh | bash
 
 ## What It Finds
 
-- Over-provisioned memory/CPU limits
+- Over-provisioned memory/CPU limits (limit > 3-4x request)
+- Underutilized CPU/memory (usage < 20% of request)
 - Pods without resource requests
 - Orphaned load balancers
 - Unused persistent volumes
-- Underutilized resources
 
 ## Privacy
 
