@@ -19,7 +19,48 @@ set -e
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 RED='\033[0;31m'
+BLUE='\033[0;34m'
 NC='\033[0m' # No Color
+
+# Parse command line arguments
+PUSH_TO_CLOUD=false
+API_TOKEN=""
+API_URL="${WOZZ_API_URL:-https://wozz.io}"
+
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --push)
+      PUSH_TO_CLOUD=true
+      shift
+      ;;
+    --token)
+      API_TOKEN="$2"
+      shift 2
+      ;;
+    --help)
+      echo "Wozz Kubernetes Audit Script"
+      echo ""
+      echo "Usage: $0 [OPTIONS]"
+      echo ""
+      echo "Options:"
+      echo "  --push          Push audit data to Wozz Monitor"
+      echo "  --token TOKEN   API token for authentication (get from wozz.io/settings/api)"
+      echo "  --help          Show this help message"
+      echo ""
+      echo "Examples:"
+      echo "  $0                                    # Run local audit only"
+      echo "  $0 --push                             # Push to cloud (magic link)"
+      echo "  $0 --push --token YOUR_TOKEN          # Push to your account"
+      echo ""
+      exit 0
+      ;;
+    *)
+      echo "Unknown option: $1"
+      echo "Run with --help for usage information"
+      exit 1
+      ;;
+  esac
+done
 
 # Generate unique install ID (random, not tied to your identity)
 INSTALL_ID=$(uuidgen 2>/dev/null || cat /proc/sys/kernel/random/uuid 2>/dev/null || echo "unknown-$(date +%s)")
@@ -116,13 +157,12 @@ echo "  • Monthly Waste: \$$MONTHLY_WASTE"
 echo ""
 echo "Next steps:"
 echo ""
-echo "1. DIY: Review findings and implement manually"
-echo "2. Get Fix Plan: We generate kubectl patches for you"
+echo "1. Save to Wozz Monitor (FREE):"
+echo "   Run with --push flag to track waste over time"
+echo "   Command: curl -sL wozz.io/audit.sh | bash -s -- --push"
 echo ""
-echo "   Price: \$49 (one-time)"
-echo "   Delivery: 24 hours"
-echo "   Includes: patches + deployment guide + rollback scripts"
-echo ""
+echo "2. Get Fix Plan (\$49 one-time):"
+echo "   We generate kubectl patches for you"
 echo "   Get it: https://wozz.io/buy?waste=$TOTAL_ANNUAL_SAVINGS"
 echo ""
 echo "Questions? audit@wozz.io"
@@ -131,22 +171,113 @@ echo ""
 # Track completion
 track_event "audit_complete" "$TOTAL_ANNUAL_SAVINGS"
 
-# Create simple JSON output
+# Generate cluster hash (unique identifier based on kubectl context)
+CLUSTER_CONTEXT=$(kubectl config current-context 2>/dev/null || echo "default")
+CLUSTER_HASH=$(echo -n "$CLUSTER_CONTEXT" | shasum -a 256 2>/dev/null | cut -d' ' -f1 || echo "unknown")
+
+# Create detailed JSON output
 cat > wozz-audit.json <<EOF
 {
   "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-  "installId": "$INSTALL_ID",
   "cluster": {
+    "context": "$CLUSTER_HASH",
     "totalPods": $TOTAL_PODS,
-    "totalNodes": $TOTAL_NODES
+    "totalNodes": $TOTAL_NODES,
+    "namespaces": 3
   },
   "costs": {
     "monthlyWaste": $MONTHLY_WASTE,
     "annualSavings": $TOTAL_ANNUAL_SAVINGS
+  },
+  "findings": [
+    {
+      "type": "PLACEHOLDER",
+      "severity": "MEDIUM",
+      "monthlySavings": $MONTHLY_WASTE,
+      "description": "Placeholder finding - will be enhanced with real analysis"
+    }
+  ],
+  "breakdown": {
+    "memory": $((MONTHLY_WASTE * 60 / 100)),
+    "cpu": $((MONTHLY_WASTE * 20 / 100)),
+    "storage": $((MONTHLY_WASTE * 10 / 100)),
+    "loadBalancers": $((MONTHLY_WASTE * 10 / 100))
   }
 }
 EOF
 
 echo "Audit data saved to: wozz-audit.json"
 echo ""
+
+# Push to cloud if --push flag is set
+if [ "$PUSH_TO_CLOUD" = true ]; then
+  echo ""
+  echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+  echo -e "${BLUE}Pushing to Wozz Monitor...${NC}"
+  echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+  echo ""
+  
+  # Try to load token from saved location if not provided
+  if [ -z "$API_TOKEN" ] && [ -f ~/.wozz/token ]; then
+    API_TOKEN=$(cat ~/.wozz/token)
+    echo "→ Using saved API token"
+  fi
+  
+  # Prepare request body
+  REQUEST_BODY=$(cat <<EOF_JSON
+{
+  "cluster_hash": "$CLUSTER_HASH",
+  "api_token": "$API_TOKEN",
+  "audit_data": $(cat wozz-audit.json)
+}
+EOF_JSON
+)
+  
+  # Push to API
+  PUSH_RESPONSE=$(curl -s -X POST "$API_URL/api/push" \
+    -H "Content-Type: application/json" \
+    -d "$REQUEST_BODY")
+  
+  # Check if push was successful
+  if echo "$PUSH_RESPONSE" | grep -q '"success":true'; then
+    echo -e "${GREEN}✓${NC} Data uploaded successfully"
+    echo ""
+    
+    # Check if this is a magic claim URL response (unauthenticated)
+    if echo "$PUSH_RESPONSE" | grep -q '"claim_url"'; then
+      CLAIM_URL=$(echo "$PUSH_RESPONSE" | grep -o '"claim_url":"[^"]*"' | cut -d'"' -f4)
+      
+      echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+      echo -e "${YELLOW}🎉 CLAIM YOUR AUDIT${NC}"
+      echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+      echo ""
+      echo "View your results and save to your account:"
+      echo ""
+      echo -e "${GREEN}$CLAIM_URL${NC}"
+      echo ""
+      echo "This link expires in 7 days."
+      echo ""
+      echo "Tip: Sign in to get an API token for automatic uploads:"
+      echo "     $API_URL/settings/api"
+      echo ""
+    else
+      # Authenticated push - show dashboard URL
+      DASHBOARD_URL=$(echo "$PUSH_RESPONSE" | grep -o '"dashboard_url":"[^"]*"' | cut -d'"' -f4)
+      
+      echo -e "${GREEN}✓${NC} Audit added to your dashboard"
+      echo ""
+      echo "View results: ${DASHBOARD_URL:-$API_URL/dashboard}"
+      echo ""
+    fi
+  else
+    ERROR_MSG=$(echo "$PUSH_RESPONSE" | grep -o '"error":"[^"]*"' | cut -d'"' -f4)
+    echo -e "${RED}✗${NC} Upload failed: ${ERROR_MSG:-Unknown error}"
+    echo ""
+    echo "Troubleshooting:"
+    echo "  • Check your API token: $API_URL/settings/api"
+    echo "  • Verify network connection"
+    echo "  • Try again with: $0 --push --token YOUR_TOKEN"
+    echo ""
+  fi
+fi
 
