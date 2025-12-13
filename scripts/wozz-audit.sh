@@ -490,11 +490,11 @@ if [[ -n "$top_offender_name" && $top_offender_waste -gt 0 ]]; then
 fi
 
 # Tease more detailed insights available in dashboard
-total_issues=$((pods_over_provisioned + orphaned_lbs + pods_no_requests))
-if [[ $total_issues -gt 1 ]]; then
-    remaining=$((total_issues - 1))
+# Use FINDING_IDX which counts actual individual findings generated
+if [[ $FINDING_IDX -gt 1 ]]; then
+    remaining=$((FINDING_IDX - 1))
     echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${BLUE}📋 ${total_issues} Total Issues Found${NC}"
+    echo -e "${BLUE}📋 ${FINDING_IDX} Total Issues Found${NC}"
     echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
     echo "  ✓ Showing top 1 above"
