@@ -27,6 +27,31 @@ PUSH_TO_CLOUD=false
 API_TOKEN=""
 API_URL="${WOZZ_API_URL:-https://wozz.io}"
 
+# ---- Quantity parsing helpers ----
+# CPU -> millicores (e.g. "250m" => 250, "1" => 1000)
+to_millicores() {
+  local v="$1"
+  [[ -z "$v" ]] && echo "" && return
+  if [[ "$v" =~ m$ ]]; then
+    echo "${v%m}"
+  else
+    awk "BEGIN {printf \"%d\", ($v * 1000)}"
+  fi
+}
+
+# Memory -> MiB (e.g. "512Mi" => 512, "1Gi" => 1024)
+to_mib() {
+  local v="$1"
+  [[ -z "$v" ]] && echo "" && return
+  case "$v" in
+    *Ki) awk "BEGIN {printf \"%d\", (${v%Ki} / 1024)}" ;;
+    *Mi) echo "${v%Mi}" ;;
+    *Gi) awk "BEGIN {printf \"%d\", (${v%Gi} * 1024)}" ;;
+    *Ti) awk "BEGIN {printf \"%d\", (${v%Ti} * 1024 * 1024)}" ;;
+    *)   echo "" ;; # unsupported format
+  esac
+}
+
 while [[ $# -gt 0 ]]; do
   case $1 in
     --push)
@@ -195,18 +220,55 @@ if [ "$USE_BASIC_COUNT" = false ]; then
         pod_namespace=$(echo "$pod_data" | jq -r '.metadata.namespace // "default"' 2>/dev/null)
         
         # Get first container resources
-        container_data=$(echo "$pod_data" | jq -r '.spec.containers[0]' 2>/dev/null)
-        [ -z "$container_data" ] && continue
+        # container_data=$(echo "$pod_data" | jq -r '.spec.containers[0]' 2>/dev/null)
+        # [ -z "$container_data" ] && continue
         
-        mem_request=$(echo "$container_data" | jq -r '.resources.requests.memory // ""' 2>/dev/null)
-        mem_limit=$(echo "$container_data" | jq -r '.resources.limits.memory // ""' 2>/dev/null)
-        cpu_request=$(echo "$container_data" | jq -r '.resources.requests.cpu // ""' 2>/dev/null)
-        cpu_limit=$(echo "$container_data" | jq -r '.resources.limits.cpu // ""' 2>/dev/null)
-        
-        # Check for no requests
-        if [[ -z "$mem_request" && -z "$cpu_request" ]]; then
-            ((pods_no_requests++))
-            continue
+        # mem_request=$(echo "$container_data" | jq -r '.resources.requests.memory // ""' 2>/dev/null)
+        # mem_limit=$(echo "$container_data" | jq -r '.resources.limits.memory // ""' 2>/dev/null)
+        # cpu_request=$(echo "$container_data" | jq -r '.resources.requests.cpu // ""' 2>/dev/null)
+        # cpu_limit=$(echo "$container_data" | jq -r '.resources.limits.cpu // ""' 2>/dev/null)
+        # Aggregate resources across ALL containers (handles sidecars)
+
+        # Sum only if the field exists; empty stays empty.
+        mem_request=$(echo "$pod_data" | jq -r '
+          [ .spec.containers[].resources.requests.memory? // empty ] | if length==0 then "" else join(",") end' 2>/dev/null)
+        mem_limit=$(echo "$pod_data" | jq -r '
+          [ .spec.containers[].resources.limits.memory? // empty ] | if length==0 then "" else join(",") end' 2>/dev/null)
+        cpu_request=$(echo "$pod_data" | jq -r '
+          [ .spec.containers[].resources.requests.cpu? // empty ] | if length==0 then "" else join(",") end' 2>/dev/null)
+        cpu_limit=$(echo "$pod_data" | jq -r '
+          [ .spec.containers[].resources.limits.cpu? // empty ] | if length==0 then "" else join(",") end' 2>/dev/null)
+
+        # Convert comma lists (one per container) into totals
+        sum_cpu_mc=0
+        sum_mem_mib=0
+        sum_cpu_lim_mc=0
+        sum_mem_lim_mib=0
+
+        IFS=',' read -ra cpu_req_arr <<< "$cpu_request"
+        for c in "${cpu_req_arr[@]}"; do
+          mc=$(to_millicores "$c"); [[ -n "$mc" ]] && sum_cpu_mc=$((sum_cpu_mc + mc))
+        done
+
+        IFS=',' read -ra mem_req_arr <<< "$mem_request"
+        for m in "${mem_req_arr[@]}"; do
+          mib=$(to_mib "$m"); [[ -n "$mib" ]] && sum_mem_mib=$((sum_mem_mib + mib))
+        done
+
+        IFS=',' read -ra cpu_lim_arr <<< "$cpu_limit"
+        for c in "${cpu_lim_arr[@]}"; do
+          mc=$(to_millicores "$c"); [[ -n "$mc" ]] && sum_cpu_lim_mc=$((sum_cpu_lim_mc + mc))
+        done
+
+        IFS=',' read -ra mem_lim_arr <<< "$mem_limit"
+        for m in "${mem_lim_arr[@]}"; do
+          mib=$(to_mib "$m"); [[ -n "$mib" ]] && sum_mem_lim_mib=$((sum_mem_lim_mib + mib))
+        done
+
+        # If nothing was set anywhere, treat as "no requests"
+        if [[ $sum_mem_mib -eq 0 && $sum_cpu_mc -eq 0 ]]; then
+          : $((pods_no_requests++))
+          continue
         fi
         
         pod_waste_total=0
@@ -215,83 +277,53 @@ if [ "$USE_BASIC_COUNT" = false ]; then
         # Otherwise, fall back to limit vs request analysis
         if [ "$METRICS_AVAILABLE" = true ]; then
             # Get actual usage from kubectl top
-            actual_usage=$(echo "$POD_METRICS" | grep "^$pod_namespace[[:space:]]*$pod_name[[:space:]]" | head -n 1)
             
+            actual_usage=$(echo "$POD_METRICS" | awk -v ns="$pod_namespace" -v name="$pod_name" '$1==ns && $2==name {print; exit}')
             if [[ -n "$actual_usage" ]]; then
                 actual_cpu=$(echo "$actual_usage" | awk '{print $3}')
                 actual_mem=$(echo "$actual_usage" | awk '{print $4}')
+            [[ -z "$actual_cpu" ]] && actual_cpu="0m"
+            [[ -z "$actual_mem" ]] && actual_mem="0Mi"
                 
-                # Memory waste: request - actual usage
-                if [[ -n "$mem_request" && -n "$actual_mem" ]]; then
-                    mem_req_mb=$(echo "$mem_request" | sed 's/Gi$//' | awk '{print int($1 * 1024)}')
-                    [[ "$mem_request" =~ Mi$ ]] && mem_req_mb=$(echo "$mem_request" | sed 's/Mi$//')
-                    
-                    actual_mem_mb=$(echo "$actual_mem" | sed 's/Gi$//' | awk '{print int($1 * 1024)}')
-                    [[ "$actual_mem" =~ Mi$ ]] && actual_mem_mb=$(echo "$actual_mem" | sed 's/Mi$//')
-                    
-                    if [[ -n "$mem_req_mb" && -n "$actual_mem_mb" && $mem_req_mb -gt $((actual_mem_mb * 2)) ]]; then
-                        waste_mb=$((mem_req_mb - (actual_mem_mb * 3 / 2)))
-                        waste_gb_cost=$(awk "BEGIN {printf \"%.0f\", ($waste_mb / 1024) * $MEMORY_COST_PER_GB_MONTH}")
-                        memory_waste_monthly=$((memory_waste_monthly + waste_gb_cost))
-                        pod_waste_total=$((pod_waste_total + waste_gb_cost))
-                        ((pods_over_provisioned++))
-                    fi
-                fi
-                
-                # CPU waste: request - actual usage
-                if [[ -n "$cpu_request" && -n "$actual_cpu" ]]; then
-                    cpu_req_mc=$(echo "$cpu_request" | sed 's/m$//')
-                    [[ ! "$cpu_request" =~ m$ ]] && cpu_req_mc=$(awk "BEGIN {print int($cpu_request * 1000)}")
-                    
-                    actual_cpu_mc=$(echo "$actual_cpu" | sed 's/m$//')
-                    [[ ! "$actual_cpu" =~ m$ ]] && actual_cpu_mc=$(awk "BEGIN {print int($actual_cpu * 1000)}")
-                    
-                    if [[ -n "$cpu_req_mc" && -n "$actual_cpu_mc" && $cpu_req_mc -gt $((actual_cpu_mc * 2)) ]]; then
-                        waste_mc=$((cpu_req_mc - (actual_cpu_mc * 3 / 2)))
-                        waste_cores_cost=$(awk "BEGIN {printf \"%.0f\", ($waste_mc / 1000) * $CPU_COST_PER_CORE_MONTH}")
-                        cpu_waste_monthly=$((cpu_waste_monthly + waste_cores_cost))
-                        pod_waste_total=$((pod_waste_total + waste_cores_cost))
-                    fi
-                fi
-            fi
-        else
-            # FALLBACK: Use limit vs request (when metrics not available)
-            # Memory over-provisioning: limit > 2x request
-            if [[ -n "$mem_request" && -n "$mem_limit" ]]; then
-                # Convert to MB
-                mem_req_mb=$(echo "$mem_request" | sed 's/Gi$//' | awk '{print int($1 * 1024)}')
-                [[ "$mem_request" =~ Mi$ ]] && mem_req_mb=$(echo "$mem_request" | sed 's/Mi$//')
-                
-                mem_lim_mb=$(echo "$mem_limit" | sed 's/Gi$//' | awk '{print int($1 * 1024)}')
-                [[ "$mem_limit" =~ Mi$ ]] && mem_lim_mb=$(echo "$mem_limit" | sed 's/Mi$//')
-                
-                if [[ -n "$mem_req_mb" && -n "$mem_lim_mb" && $mem_lim_mb -gt $((mem_req_mb * 2)) ]]; then
-                    waste_mb=$((mem_lim_mb - (mem_req_mb * 3 / 2)))
-                    waste_gb_cost=$(awk "BEGIN {printf \"%.0f\", ($waste_mb / 1024) * $MEMORY_COST_PER_GB_MONTH}")
+                # Memory waste: request - actual usage (MiB)
+                actual_mem_mib=$(to_mib "$actual_mem")
+                if [[ -n "$actual_mem_mib" && $sum_mem_mib -gt $((actual_mem_mib * 2)) ]]; then
+                    waste_mib=$((sum_mem_mib - (actual_mem_mib * 3 / 2)))
+                    waste_gb_cost=$(awk "BEGIN {printf \"%.0f\", ($waste_mib / 1024) * $MEMORY_COST_PER_GB_MONTH}")
                     memory_waste_monthly=$((memory_waste_monthly + waste_gb_cost))
                     pod_waste_total=$((pod_waste_total + waste_gb_cost))
-                    ((pods_over_provisioned++))
+                    : $((pods_over_provisioned++))
                 fi
-            fi
-            
-            # CPU over-provisioning: limit > 3x request
-            if [[ -n "$cpu_request" && -n "$cpu_limit" ]]; then
-                # Convert to millicores
-                cpu_req_mc=$(echo "$cpu_request" | sed 's/m$//')
-                [[ ! "$cpu_request" =~ m$ ]] && cpu_req_mc=$(awk "BEGIN {print int($cpu_request * 1000)}")
-                
-                cpu_lim_mc=$(echo "$cpu_limit" | sed 's/m$//')
-                [[ ! "$cpu_limit" =~ m$ ]] && cpu_lim_mc=$(awk "BEGIN {print int($cpu_limit * 1000)}")
-                
-                if [[ -n "$cpu_req_mc" && -n "$cpu_lim_mc" && $cpu_lim_mc -gt $((cpu_req_mc * 3)) ]]; then
-                    waste_mc=$((cpu_lim_mc - (cpu_req_mc * 3 / 2)))
+
+                # CPU waste: request - actual usage (millicores)
+                actual_cpu_mc=$(to_millicores "$actual_cpu")
+                if [[ -n "$actual_cpu_mc" && $sum_cpu_mc -gt $((actual_cpu_mc * 2)) ]]; then
+                    waste_mc=$((sum_cpu_mc - (actual_cpu_mc * 3 / 2)))
                     waste_cores_cost=$(awk "BEGIN {printf \"%.0f\", ($waste_mc / 1000) * $CPU_COST_PER_CORE_MONTH}")
                     cpu_waste_monthly=$((cpu_waste_monthly + waste_cores_cost))
                     pod_waste_total=$((pod_waste_total + waste_cores_cost))
                 fi
             fi
-        fi
+        else
+            # FALLBACK: Use limit vs request (when metrics not available)
+            # Memory over-provisioning: limit > 2x request
+            if [[ $sum_mem_mib -gt 0 && $sum_mem_lim_mib -gt 0 && $sum_mem_lim_mib -gt $((sum_mem_mib * 2)) ]]; then
+                waste_mib=$((sum_mem_lim_mib - (sum_mem_mib * 3 / 2)))
+                waste_gb_cost=$(awk "BEGIN {printf \"%.0f\", ($waste_mib / 1024) * $MEMORY_COST_PER_GB_MONTH}")
+                memory_waste_monthly=$((memory_waste_monthly + waste_gb_cost))
+                pod_waste_total=$((pod_waste_total + waste_gb_cost))
+                : $((pods_over_provisioned++))
+            fi
+
+            # CPU over-provisioning: limit > 3x request
+            if [[ $sum_cpu_mc -gt 0 && $sum_cpu_lim_mc -gt 0 && $sum_cpu_lim_mc -gt $((sum_cpu_mc * 3)) ]]; then
+                waste_mc=$((sum_cpu_lim_mc - (sum_cpu_mc * 3 / 2)))
+                waste_cores_cost=$(awk "BEGIN {printf \"%.0f\", ($waste_mc / 1000) * $CPU_COST_PER_CORE_MONTH}")
+                cpu_waste_monthly=$((cpu_waste_monthly + waste_cores_cost))
+                pod_waste_total=$((pod_waste_total + waste_cores_cost))
+            fi
         
+        fi
         # Track top offender
         if [[ $pod_waste_total -gt $top_offender_waste && -n "$pod_name" ]]; then
             top_offender_waste=$pod_waste_total
@@ -331,7 +363,7 @@ if [ "$USE_BASIC_COUNT" = false ]; then
         if [[ "$svc_type" == "LoadBalancer" ]]; then
             selector_count=$(echo "$svc" | jq '.spec.selector // {} | length' 2>/dev/null)
             if [[ $selector_count -eq 0 ]]; then
-                ((orphaned_lbs++))
+                : $((orphaned_lbs++))
             fi
         fi
     done < <(echo "$SERVICES" | jq -c '.items[]? // empty' 2>/dev/null)
@@ -572,5 +604,3 @@ else
     echo ""
   fi
 fi
-
-
