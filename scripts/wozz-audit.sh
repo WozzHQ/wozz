@@ -489,7 +489,7 @@ if [[ $memory_waste_monthly -gt 0 ]]; then
       \"recommendation\": \"Reduce memory limits to 1.5x actual usage or use VPA\",
       \"kubectlCommands\": [\"kubectl set resources deployment/<name> --limits=memory=<recommended>\"]
     }"
-  ((FINDING_COUNT++))
+  : $((FINDING_COUNT++))
 fi
 
 # CPU over-provisioning finding
@@ -506,7 +506,7 @@ if [[ $cpu_waste_monthly -gt 0 ]]; then
       \"recommendation\": \"Reduce CPU limits or remove them entirely (K8s throttles gracefully)\",
       \"kubectlCommands\": [\"kubectl set resources deployment/<name> --limits=cpu=<recommended>\"]
     }"
-  ((FINDING_COUNT++))
+  : $((FINDING_COUNT++))
 fi
 
 # Storage waste finding
@@ -523,7 +523,7 @@ if [[ ${storage_waste_monthly:-0} -gt 0 ]]; then
       \"recommendation\": \"Delete unused PVs or reclaim released volumes\",
       \"kubectlCommands\": [\"kubectl get pv | grep -v Bound\", \"kubectl delete pv <name>\"]
     }"
-  ((FINDING_COUNT++))
+  : $((FINDING_COUNT++))
 fi
 
 # Orphaned LB finding
@@ -540,7 +540,7 @@ if [[ ${lb_waste_monthly:-0} -gt 0 ]]; then
       \"recommendation\": \"Delete unused LoadBalancer services or convert to ClusterIP\",
       \"kubectlCommands\": [\"kubectl get svc -A | grep LoadBalancer\", \"kubectl delete svc <name> -n <namespace>\"]
     }"
-  ((FINDING_COUNT++))
+  : $((FINDING_COUNT++))
 fi
 
 # No requests finding
@@ -557,7 +557,7 @@ if [[ ${pods_no_requests:-0} -gt 0 ]]; then
       \"recommendation\": \"Add resource requests to all pods for proper scheduling and visibility\",
       \"kubectlCommands\": [\"kubectl set resources deployment/<name> --requests=cpu=100m,memory=256Mi\"]
     }"
-  ((FINDING_COUNT++))
+  : $((FINDING_COUNT++))
 fi
 
 # Top offender as specific finding
@@ -582,7 +582,7 @@ if [[ -n "$top_offender_name" && $top_offender_waste -gt 0 ]]; then
       \"recommendation\": \"Right-size this pod first for maximum impact\",
       \"kubectlCommands\": [\"kubectl describe pod $top_offender_name -n $top_offender_namespace\"]
     }"
-  ((FINDING_COUNT++))
+  : $((FINDING_COUNT++))
 fi
 
 FINDINGS="$FINDINGS
