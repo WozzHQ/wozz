@@ -326,7 +326,10 @@ if [ "$USE_BASIC_COUNT" = false ]; then
                 actual_mem_mib=$(to_mib "$actual_mem")
                 if [[ -n "$actual_mem_mib" && $sum_mem_mib -gt $((actual_mem_mib * 2)) ]]; then
                     waste_mib=$((sum_mem_mib - (actual_mem_mib * 3 / 2)))
-                    waste_gb_cost=$(awk "BEGIN {printf \"%.0f\", ($waste_mib / 1024) * $MEMORY_COST_PER_GB_MONTH}")
+                    # Calculate annual first to avoid rounding small values to 0
+                    waste_gb_annual=$(awk "BEGIN {printf \"%.0f\", ($waste_mib / 1024) * $MEMORY_COST_PER_GB_MONTH * 12}")
+                    waste_gb_cost=$(( (waste_gb_annual + 6) / 12 ))  # Round to nearest month
+                    [[ $waste_gb_cost -eq 0 && $waste_gb_annual -gt 0 ]] && waste_gb_cost=1
                     memory_waste_monthly=$((memory_waste_monthly + waste_gb_cost))
                     pod_waste_total=$((pod_waste_total + waste_gb_cost))
                     : $((pods_over_provisioned++))
@@ -339,7 +342,10 @@ if [ "$USE_BASIC_COUNT" = false ]; then
                 actual_cpu_mc=$(to_millicores "$actual_cpu")
                 if [[ -n "$actual_cpu_mc" && $sum_cpu_mc -gt $((actual_cpu_mc * 2)) ]]; then
                     waste_mc=$((sum_cpu_mc - (actual_cpu_mc * 3 / 2)))
-                    waste_cores_cost=$(awk "BEGIN {printf \"%.0f\", ($waste_mc / 1000) * $CPU_COST_PER_CORE_MONTH}")
+                    # Calculate annual first to avoid rounding small values to 0
+                    waste_cpu_annual=$(awk "BEGIN {printf \"%.0f\", ($waste_mc / 1000) * $CPU_COST_PER_CORE_MONTH * 12}")
+                    waste_cores_cost=$(( (waste_cpu_annual + 6) / 12 ))  # Round to nearest month
+                    [[ $waste_cores_cost -eq 0 && $waste_cpu_annual -gt 0 ]] && waste_cores_cost=1
                     cpu_waste_monthly=$((cpu_waste_monthly + waste_cores_cost))
                     pod_waste_total=$((pod_waste_total + waste_cores_cost))
                     # Record individual finding
@@ -352,7 +358,10 @@ if [ "$USE_BASIC_COUNT" = false ]; then
             # Memory over-provisioning: limit > 2x request
             if [[ $sum_mem_mib -gt 0 && $sum_mem_lim_mib -gt 0 && $sum_mem_lim_mib -gt $((sum_mem_mib * 2)) ]]; then
                 waste_mib=$((sum_mem_lim_mib - (sum_mem_mib * 3 / 2)))
-                waste_gb_cost=$(awk "BEGIN {printf \"%.0f\", ($waste_mib / 1024) * $MEMORY_COST_PER_GB_MONTH}")
+                # Calculate annual first to avoid rounding small values to 0
+                waste_gb_annual=$(awk "BEGIN {printf \"%.0f\", ($waste_mib / 1024) * $MEMORY_COST_PER_GB_MONTH * 12}")
+                waste_gb_cost=$(( (waste_gb_annual + 6) / 12 ))
+                [[ $waste_gb_cost -eq 0 && $waste_gb_annual -gt 0 ]] && waste_gb_cost=1
                 memory_waste_monthly=$((memory_waste_monthly + waste_gb_cost))
                 pod_waste_total=$((pod_waste_total + waste_gb_cost))
                 : $((pods_over_provisioned++))
@@ -364,7 +373,10 @@ if [ "$USE_BASIC_COUNT" = false ]; then
             # CPU over-provisioning: limit > 3x request
             if [[ $sum_cpu_mc -gt 0 && $sum_cpu_lim_mc -gt 0 && $sum_cpu_lim_mc -gt $((sum_cpu_mc * 3)) ]]; then
                 waste_mc=$((sum_cpu_lim_mc - (sum_cpu_mc * 3 / 2)))
-                waste_cores_cost=$(awk "BEGIN {printf \"%.0f\", ($waste_mc / 1000) * $CPU_COST_PER_CORE_MONTH}")
+                # Calculate annual first to avoid rounding small values to 0
+                waste_cpu_annual=$(awk "BEGIN {printf \"%.0f\", ($waste_mc / 1000) * $CPU_COST_PER_CORE_MONTH * 12}")
+                waste_cores_cost=$(( (waste_cpu_annual + 6) / 12 ))
+                [[ $waste_cores_cost -eq 0 && $waste_cpu_annual -gt 0 ]] && waste_cores_cost=1
                 cpu_waste_monthly=$((cpu_waste_monthly + waste_cores_cost))
                 pod_waste_total=$((pod_waste_total + waste_cores_cost))
                 # Record individual finding  
