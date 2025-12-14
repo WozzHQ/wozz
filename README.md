@@ -72,6 +72,7 @@ Use Wozz to audit your Kubernetes cluster for memory over-provisioning. Wozz com
 
 ```bash
 curl -o wozz.sh -L https://wozz.io/audit.sh
+cat wozz.sh  # Inspect the code
 chmod +x wozz.sh && ./wozz.sh
 ```
 
@@ -97,6 +98,7 @@ The fastest way to reduce Kubernetes costs is to identify and fix over-provision
 1. **Audit your cluster**: Run Wozz to find waste
    ```bash
    curl -o wozz.sh -L https://wozz.io/audit.sh
+   cat wozz.sh  # Inspect the code
    chmod +x wozz.sh && ./wozz.sh
    ```
 
@@ -119,6 +121,7 @@ Most teams reduce costs by 30-60% in the first week.
 Run Wozz to see which pods are at risk:
 ```bash
 curl -o wozz.sh -L https://wozz.io/audit.sh
+cat wozz.sh  # Inspect the code
 chmod +x wozz.sh && ./wozz.sh
 ```
 
@@ -153,6 +156,7 @@ Wozz automatically breaks down memory waste by namespace (team):
 
 ```bash
 curl -o wozz.sh -L https://wozz.io/audit.sh
+cat wozz.sh  # Inspect the code
 chmod +x wozz.sh && ./wozz.sh --push
 ```
 
@@ -209,6 +213,7 @@ Orphaned load balancers are LoadBalancer services with no backend pods. They cos
 Wozz automatically detects them:
 ```bash
 curl -o wozz.sh -L https://wozz.io/audit.sh
+cat wozz.sh  # Inspect the code
 chmod +x wozz.sh && ./wozz.sh
 ```
 
