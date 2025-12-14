@@ -11,11 +11,27 @@
 
 ## Quick Start
 
+**Step 1: Download the script**
+
 ```bash
-curl -sL https://wozz.io/audit.sh | bash
+curl -o wozz.sh -L https://wozz.io/audit.sh
 ```
 
-Get your waste report in 30 seconds. No installation. No agents. No configuration.
+**Step 2: Inspect the code**
+
+```bash
+cat wozz.sh
+```
+
+> Review the script before running. You'll see it only uses read-only `kubectl top` and `kubectl get` commands - no modifications to your cluster.
+
+**Step 3: Run the audit**
+
+```bash
+chmod +x wozz.sh && ./wozz.sh
+```
+
+Get your waste report in 30 seconds. No agents. No configuration.
 
 ---
 
@@ -55,7 +71,8 @@ Wozz is a **Kubernetes resource auditor** that compares your pod requests vs. ac
 Use Wozz to audit your Kubernetes cluster for memory over-provisioning. Wozz compares actual memory usage (from `kubectl top pods`) against resource requests to identify waste:
 
 ```bash
-curl -L https://wozz.io/audit.sh | bash
+curl -o wozz.sh -L https://wozz.io/audit.sh
+chmod +x wozz.sh && ./wozz.sh
 ```
 
 You'll get a report showing:
@@ -79,7 +96,8 @@ The fastest way to reduce Kubernetes costs is to identify and fix over-provision
 
 1. **Audit your cluster**: Run Wozz to find waste
    ```bash
-   curl -L https://wozz.io/audit.sh | bash
+   curl -o wozz.sh -L https://wozz.io/audit.sh
+   chmod +x wozz.sh && ./wozz.sh
    ```
 
 2. **Identify top wasters**: Wozz ranks pods by waste amount
@@ -100,7 +118,8 @@ Most teams reduce costs by 30-60% in the first week.
 
 Run Wozz to see which pods are at risk:
 ```bash
-curl -L https://wozz.io/audit.sh | bash
+curl -o wozz.sh -L https://wozz.io/audit.sh
+chmod +x wozz.sh && ./wozz.sh
 ```
 
 Look for the "Memory Limits" section in the report.
@@ -133,7 +152,8 @@ kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/late
 Wozz automatically breaks down memory waste by namespace (team):
 
 ```bash
-curl -L https://wozz.io/audit.sh | bash -s -- --push
+curl -o wozz.sh -L https://wozz.io/audit.sh
+chmod +x wozz.sh && ./wozz.sh --push
 ```
 
 Then visit your dashboard to see:
@@ -188,7 +208,8 @@ Orphaned load balancers are LoadBalancer services with no backend pods. They cos
 
 Wozz automatically detects them:
 ```bash
-curl -L https://wozz.io/audit.sh | bash
+curl -o wozz.sh -L https://wozz.io/audit.sh
+chmod +x wozz.sh && ./wozz.sh
 ```
 
 Look for the "Orphaned Load Balancers" section. Wozz provides a `kubectl delete` command to remove them safely.
@@ -278,24 +299,32 @@ kubectl get svc --all-namespaces -o json
 
 ## Installation & Usage
 
-### One-Line Audit (Recommended)
+### Standard Installation (Recommended)
+
+**Step 1: Download the script**
 
 ```bash
-curl -L https://wozz.io/audit.sh | bash
+curl -o wozz.sh -L https://wozz.io/audit.sh
 ```
 
-### Download and Inspect First
+**Step 2: Inspect the code**
 
 ```bash
-curl -L -o wozz-audit.sh https://wozz.io/audit.sh
-cat wozz-audit.sh  # Review the code
-bash wozz-audit.sh
+cat wozz.sh
+```
+
+> Review the script before running. You'll see it only uses read-only `kubectl top` and `kubectl get` commands - no modifications to your cluster.
+
+**Step 3: Run the audit**
+
+```bash
+chmod +x wozz.sh && ./wozz.sh
 ```
 
 ### Push to Dashboard (Optional)
 
 ```bash
-curl -L https://wozz.io/audit.sh | bash -s -- --push
+./wozz.sh --push
 ```
 
 Creates a magic link to view results in a web dashboard:
@@ -311,7 +340,7 @@ Creates a magic link to view results in a web dashboard:
 - **Runs locally**: All analysis happens on your machine
 - **No agents**: Uses standard kubectl (no pods deployed to your cluster)
 - **Optional telemetry**: Anonymous usage stats (start/complete events only)
-- **Opt-out**: `WOZZ_NO_TELEMETRY=1 curl -L https://wozz.io/audit.sh | bash`
+- **Opt-out**: `WOZZ_NO_TELEMETRY=1 ./wozz.sh`
 - **Open source**: Inspect the code yourself
 
 ---
@@ -356,28 +385,28 @@ Creates a magic link to view results in a web dashboard:
 
 ```bash
 # Basic audit (local only)
-curl -L https://wozz.io/audit.sh | bash
+./wozz.sh
 
 # Push to dashboard
-curl -L https://wozz.io/audit.sh | bash -s -- --push
+./wozz.sh --push
 
 # With API token (saves to your account)
-curl -L https://wozz.io/audit.sh | bash -s -- --push --token YOUR_TOKEN
+./wozz.sh --push --token YOUR_TOKEN
 
 # Disable telemetry
-WOZZ_NO_TELEMETRY=1 curl -L https://wozz.io/audit.sh | bash
+WOZZ_NO_TELEMETRY=1 ./wozz.sh
 ```
 
 ---
 
-## Don't Trust curl | bash?
+## Security & Trust
 
-Download and inspect first:
+Our standard installation follows security best practices by having you download, inspect, then run:
 
 ```bash
-curl -L -o wozz-audit.sh https://wozz.io/audit.sh
-cat wozz-audit.sh
-bash wozz-audit.sh
+curl -o wozz.sh -L https://wozz.io/audit.sh
+cat wozz.sh  # Review the code
+chmod +x wozz.sh && ./wozz.sh
 ```
 
 ---
