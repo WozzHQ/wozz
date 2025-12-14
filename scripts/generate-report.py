@@ -350,6 +350,82 @@ def analyze_storage(audit_dir: str) -> List[Dict[str, Any]]:
     
     return findings
 
+def aggregate_findings(findings: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Aggregate per-pod findings into category findings with examples"""
+    if not findings:
+        return []
+
+    # Group findings by type
+    by_type = {}
+    for finding in findings:
+        ftype = finding.get('type', 'UNKNOWN')
+        if ftype not in by_type:
+            by_type[ftype] = []
+        by_type[ftype].append(finding)
+
+    aggregated = []
+    for ftype, group in by_type.items():
+        # Calculate total savings for this type
+        total_savings = sum(f.get('monthlySavings', 0) for f in group)
+
+        # Determine severity (use highest severity in group)
+        severity_order = {'HIGH': 3, 'MEDIUM': 2, 'LOW': 1}
+        max_severity = max(group, key=lambda x: severity_order.get(x.get('severity', 'LOW'), 0))['severity']
+
+        # Count affected resources
+        pods_affected = len(set(f"{f.get('namespace', 'default')}/{f.get('pod', 'unknown')}" for f in group if f.get('pod')))
+        resources_affected = len(group)
+
+        # Build description based on type
+        descriptions = {
+            'OVER_PROVISIONED_MEMORY': f"Pods requesting significantly more memory than they use",
+            'OVER_PROVISIONED_CPU': f"Pods requesting significantly more CPU than they use",
+            'UNDERUTILIZED_MEMORY': f"Pods using less than 20% of requested memory",
+            'UNDERUTILIZED_CPU': f"Pods using less than 20% of requested CPU",
+            'NO_REQUESTS': f"Pods without resource requests - causes unpredictable scheduling",
+            'ORPHANED_LB': f"Load balancers with no backend endpoints",
+            'UNBOUND_PV': f"Persistent volumes not bound to any pods"
+        }
+        description = descriptions.get(ftype, f"Issues of type {ftype}")
+
+        # Create aggregated finding
+        agg_finding = {
+            'type': ftype,
+            'severity': max_severity,
+            'monthlySavings': total_savings,
+            'description': description
+        }
+
+        # Add appropriate count
+        if ftype in ['ORPHANED_LB', 'UNBOUND_PV']:
+            agg_finding['resourcesAffected'] = resources_affected
+        else:
+            agg_finding['podsAffected'] = pods_affected
+
+        # Add top 5 examples in details
+        sorted_examples = sorted(group, key=lambda x: x.get('monthlySavings', 0), reverse=True)[:5]
+        if sorted_examples and sorted_examples[0].get('pod'):
+            # Per-pod findings - include as examples
+            agg_finding['details'] = {
+                'examples': [
+                    {
+                        'pod': ex.get('pod'),
+                        'namespace': ex.get('namespace'),
+                        'container': ex.get('container'),
+                        'wastePerMonth': ex.get('monthlySavings'),
+                        'request': ex.get('details', {}).get('request', 'N/A'),
+                        'usage': ex.get('details', {}).get('usage', 'N/A'),
+                        'limit': ex.get('details', {}).get('limit', 'N/A')
+                    }
+                    for ex in sorted_examples
+                ]
+            }
+
+        aggregated.append(agg_finding)
+
+    # Sort by monthly savings descending
+    return sorted(aggregated, key=lambda x: x.get('monthlySavings', 0), reverse=True)
+
 def generate_terminal_output(report_data: Dict[str, Any]) -> str:
     """Generate terminal-formatted output"""
     output = []
@@ -715,8 +791,11 @@ def main():
     
     # Combine all findings
     all_findings = pod_findings + lb_findings + storage_findings
-    
-    # Calculate totals
+
+    # Aggregate findings by type (group per-pod findings)
+    aggregated_findings = aggregate_findings(all_findings)
+
+    # Calculate totals (use original findings for accurate totals)
     monthly_waste = sum(f.get('monthlySavings', 0) for f in all_findings)
     annual_savings = monthly_waste * 12
     
@@ -753,7 +832,7 @@ def main():
             'currentMonthlyCost': current_cost,
             'optimizedMonthlyCost': current_cost - monthly_waste
         },
-        'findings': all_findings,
+        'findings': aggregated_findings,
         'breakdown': breakdown
     }
     
@@ -776,3 +855,4 @@ def main():
 if __name__ == "__main__":
     main()
 
+    
