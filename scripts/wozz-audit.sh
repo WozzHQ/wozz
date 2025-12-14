@@ -200,6 +200,10 @@ lb_waste_monthly=0
 pods_over_provisioned=0
 pods_no_requests=0
 
+# Collect individual pod findings for JSON output
+POD_FINDINGS=""
+FINDING_IDX=0
+
 # Top offender tracking
 top_offender_name=""
 top_offender_namespace=""
@@ -210,6 +214,36 @@ top_offender_mem_actual=""
 top_offender_cpu_request=""
 top_offender_cpu_limit=""
 top_offender_cpu_actual=""
+
+# Helper to add a pod finding
+add_pod_finding() {
+    local type="$1"
+    local severity="$2"
+    local pod="$3"
+    local ns="$4"
+    local savings="$5"
+    local desc="$6"
+    local req="$7"
+    local actual="$8"
+    
+    [[ $FINDING_IDX -gt 0 ]] && POD_FINDINGS="$POD_FINDINGS,"
+    POD_FINDINGS="$POD_FINDINGS
+    {
+      \"id\": \"finding-$FINDING_IDX\",
+      \"type\": \"$type\",
+      \"severity\": \"$severity\",
+      \"pod\": \"$pod\",
+      \"namespace\": \"$ns\",
+      \"monthlySavings\": $savings,
+      \"description\": \"$desc\",
+      \"details\": {
+        \"requested\": \"$req\",
+        \"actual\": \"$actual\"
+      },
+      \"recommendation\": \"Right-size this pod to match actual usage\"
+    }"
+    : $((FINDING_IDX++))
+}
 
 if [ "$USE_BASIC_COUNT" = false ]; then
     # REAL ANALYSIS: Compare actual usage vs requests
@@ -268,6 +302,9 @@ if [ "$USE_BASIC_COUNT" = false ]; then
         # If nothing was set anywhere, treat as "no requests"
         if [[ $sum_mem_mib -eq 0 && $sum_cpu_mc -eq 0 ]]; then
           : $((pods_no_requests++))
+          # Record as finding
+          add_pod_finding "NO_REQUESTS" "HIGH" "$pod_name" "$pod_namespace" "0" \
+              "No resource requests set - causes unpredictable scheduling" "none" "unknown"
           continue
         fi
         
@@ -289,19 +326,31 @@ if [ "$USE_BASIC_COUNT" = false ]; then
                 actual_mem_mib=$(to_mib "$actual_mem")
                 if [[ -n "$actual_mem_mib" && $sum_mem_mib -gt $((actual_mem_mib * 2)) ]]; then
                     waste_mib=$((sum_mem_mib - (actual_mem_mib * 3 / 2)))
-                    waste_gb_cost=$(awk "BEGIN {printf \"%.0f\", ($waste_mib / 1024) * $MEMORY_COST_PER_GB_MONTH}")
+                    # Calculate annual first to avoid rounding small values to 0
+                    waste_gb_annual=$(awk "BEGIN {printf \"%.0f\", ($waste_mib / 1024) * $MEMORY_COST_PER_GB_MONTH * 12}")
+                    waste_gb_cost=$(( (waste_gb_annual + 6) / 12 ))  # Round to nearest month
+                    [[ $waste_gb_cost -eq 0 && $waste_gb_annual -gt 0 ]] && waste_gb_cost=1
                     memory_waste_monthly=$((memory_waste_monthly + waste_gb_cost))
                     pod_waste_total=$((pod_waste_total + waste_gb_cost))
                     : $((pods_over_provisioned++))
+                    # Record individual finding
+                    add_pod_finding "MEMORY_OVERPROVISIONED" "HIGH" "$pod_name" "$pod_namespace" "$waste_gb_cost" \
+                        "Memory: requesting ${sum_mem_mib}Mi but using ${actual_mem_mib}Mi" "${sum_mem_mib}Mi" "${actual_mem_mib}Mi"
                 fi
 
                 # CPU waste: request - actual usage (millicores)
                 actual_cpu_mc=$(to_millicores "$actual_cpu")
                 if [[ -n "$actual_cpu_mc" && $sum_cpu_mc -gt $((actual_cpu_mc * 2)) ]]; then
                     waste_mc=$((sum_cpu_mc - (actual_cpu_mc * 3 / 2)))
-                    waste_cores_cost=$(awk "BEGIN {printf \"%.0f\", ($waste_mc / 1000) * $CPU_COST_PER_CORE_MONTH}")
+                    # Calculate annual first to avoid rounding small values to 0
+                    waste_cpu_annual=$(awk "BEGIN {printf \"%.0f\", ($waste_mc / 1000) * $CPU_COST_PER_CORE_MONTH * 12}")
+                    waste_cores_cost=$(( (waste_cpu_annual + 6) / 12 ))  # Round to nearest month
+                    [[ $waste_cores_cost -eq 0 && $waste_cpu_annual -gt 0 ]] && waste_cores_cost=1
                     cpu_waste_monthly=$((cpu_waste_monthly + waste_cores_cost))
                     pod_waste_total=$((pod_waste_total + waste_cores_cost))
+                    # Record individual finding
+                    add_pod_finding "CPU_OVERPROVISIONED" "MEDIUM" "$pod_name" "$pod_namespace" "$waste_cores_cost" \
+                        "CPU: requesting ${sum_cpu_mc}m but using ${actual_cpu_mc}m" "${sum_cpu_mc}m" "${actual_cpu_mc}m"
                 fi
             fi
         else
@@ -309,18 +358,30 @@ if [ "$USE_BASIC_COUNT" = false ]; then
             # Memory over-provisioning: limit > 2x request
             if [[ $sum_mem_mib -gt 0 && $sum_mem_lim_mib -gt 0 && $sum_mem_lim_mib -gt $((sum_mem_mib * 2)) ]]; then
                 waste_mib=$((sum_mem_lim_mib - (sum_mem_mib * 3 / 2)))
-                waste_gb_cost=$(awk "BEGIN {printf \"%.0f\", ($waste_mib / 1024) * $MEMORY_COST_PER_GB_MONTH}")
+                # Calculate annual first to avoid rounding small values to 0
+                waste_gb_annual=$(awk "BEGIN {printf \"%.0f\", ($waste_mib / 1024) * $MEMORY_COST_PER_GB_MONTH * 12}")
+                waste_gb_cost=$(( (waste_gb_annual + 6) / 12 ))
+                [[ $waste_gb_cost -eq 0 && $waste_gb_annual -gt 0 ]] && waste_gb_cost=1
                 memory_waste_monthly=$((memory_waste_monthly + waste_gb_cost))
                 pod_waste_total=$((pod_waste_total + waste_gb_cost))
                 : $((pods_over_provisioned++))
+                # Record individual finding
+                add_pod_finding "MEMORY_OVERPROVISIONED" "HIGH" "$pod_name" "$pod_namespace" "$waste_gb_cost" \
+                    "Memory limit ${sum_mem_lim_mib}Mi exceeds request ${sum_mem_mib}Mi" "${sum_mem_mib}Mi" "${sum_mem_lim_mib}Mi"
             fi
 
             # CPU over-provisioning: limit > 3x request
             if [[ $sum_cpu_mc -gt 0 && $sum_cpu_lim_mc -gt 0 && $sum_cpu_lim_mc -gt $((sum_cpu_mc * 3)) ]]; then
                 waste_mc=$((sum_cpu_lim_mc - (sum_cpu_mc * 3 / 2)))
-                waste_cores_cost=$(awk "BEGIN {printf \"%.0f\", ($waste_mc / 1000) * $CPU_COST_PER_CORE_MONTH}")
+                # Calculate annual first to avoid rounding small values to 0
+                waste_cpu_annual=$(awk "BEGIN {printf \"%.0f\", ($waste_mc / 1000) * $CPU_COST_PER_CORE_MONTH * 12}")
+                waste_cores_cost=$(( (waste_cpu_annual + 6) / 12 ))
+                [[ $waste_cores_cost -eq 0 && $waste_cpu_annual -gt 0 ]] && waste_cores_cost=1
                 cpu_waste_monthly=$((cpu_waste_monthly + waste_cores_cost))
                 pod_waste_total=$((pod_waste_total + waste_cores_cost))
+                # Record individual finding  
+                add_pod_finding "CPU_OVERPROVISIONED" "MEDIUM" "$pod_name" "$pod_namespace" "$waste_cores_cost" \
+                    "CPU limit ${sum_cpu_lim_mc}m exceeds request ${sum_cpu_mc}m" "${sum_cpu_mc}m" "${sum_cpu_lim_mc}m"
             fi
         
         fi
@@ -441,11 +502,11 @@ if [[ -n "$top_offender_name" && $top_offender_waste -gt 0 ]]; then
 fi
 
 # Tease more detailed insights available in dashboard
-total_issues=$((pods_over_provisioned + orphaned_lbs + pods_no_requests))
-if [[ $total_issues -gt 1 ]]; then
-    remaining=$((total_issues - 1))
+# Use FINDING_IDX which counts actual individual findings generated
+if [[ $FINDING_IDX -gt 1 ]]; then
+    remaining=$((FINDING_IDX - 1))
     echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${BLUE}📋 ${total_issues} Total Issues Found${NC}"
+    echo -e "${BLUE}📋 ${FINDING_IDX} Total Issues Found${NC}"
     echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
     echo "  ✓ Showing top 1 above"
@@ -471,6 +532,11 @@ track_event "audit_complete" "$TOTAL_ANNUAL_SAVINGS"
 CLUSTER_CONTEXT=$(kubectl config current-context 2>/dev/null || echo "default")
 CLUSTER_HASH=$(echo -n "$CLUSTER_CONTEXT" | shasum -a 256 2>/dev/null | cut -d' ' -f1 || echo "unknown")
 
+# Use the collected POD_FINDINGS for the JSON output
+# This includes all individual pod-level issues found during analysis
+FINDINGS="[$POD_FINDINGS
+  ]"
+
 # Create detailed JSON output
 cat > wozz-audit.json <<EOF
 {
@@ -485,23 +551,16 @@ cat > wozz-audit.json <<EOF
     "monthlyWaste": $MONTHLY_WASTE,
     "annualSavings": $TOTAL_ANNUAL_SAVINGS
   },
-  "findings": [
-    {
-      "type": "PLACEHOLDER",
-      "severity": "MEDIUM",
-      "monthlySavings": $MONTHLY_WASTE,
-      "description": "Placeholder finding - will be enhanced with real analysis"
-    }
-  ],
+  "findings": $FINDINGS,
   "breakdown": {
     "memory": $memory_waste_monthly,
     "cpu": $cpu_waste_monthly,
-    "storage": $storage_waste_monthly,
-    "loadBalancers": $lb_waste_monthly
+    "storage": ${storage_waste_monthly:-0},
+    "loadBalancers": ${lb_waste_monthly:-0}
   },
   "details": {
-    "pods_over_provisioned": $pods_over_provisioned,
-    "pods_no_requests": $pods_no_requests,
+    "pods_over_provisioned": ${pods_over_provisioned:-0},
+    "pods_no_requests": ${pods_no_requests:-0},
     "orphaned_load_balancers": ${orphaned_lbs:-0},
     "unbound_storage_gb": ${unbound_storage_gb:-0}
   }
