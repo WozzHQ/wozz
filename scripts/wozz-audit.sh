@@ -200,9 +200,11 @@ lb_waste_monthly=0
 pods_over_provisioned=0
 pods_no_requests=0
 
-# Collect individual pod findings for JSON output
-POD_FINDINGS=""
-FINDING_IDX=0
+# Aggregated findings tracking (by issue type)
+declare -A finding_pods_count      # Count of pods per finding type
+declare -A finding_total_savings   # Total monthly savings per type
+declare -A finding_severity        # Severity per type
+declare -A finding_examples        # JSON array of top examples per type
 
 # Top offender tracking
 top_offender_name=""
@@ -215,34 +217,37 @@ top_offender_cpu_request=""
 top_offender_cpu_limit=""
 top_offender_cpu_actual=""
 
-# Helper to add a pod finding
-add_pod_finding() {
+# Helper to track a finding for aggregation
+track_finding() {
     local type="$1"
     local severity="$2"
     local pod="$3"
     local ns="$4"
     local savings="$5"
-    local desc="$6"
-    local req="$7"
-    local actual="$8"
-    
-    [[ $FINDING_IDX -gt 0 ]] && POD_FINDINGS="$POD_FINDINGS,"
-    POD_FINDINGS="$POD_FINDINGS
-    {
-      \"id\": \"finding-$FINDING_IDX\",
-      \"type\": \"$type\",
-      \"severity\": \"$severity\",
-      \"pod\": \"$pod\",
-      \"namespace\": \"$ns\",
-      \"monthlySavings\": $savings,
-      \"description\": \"$desc\",
-      \"details\": {
-        \"requested\": \"$req\",
-        \"actual\": \"$actual\"
-      },
-      \"recommendation\": \"Right-size this pod to match actual usage\"
-    }"
-    : $((FINDING_IDX++))
+    local req="$6"
+    local actual="$7"
+
+    # Initialize if first occurrence
+    if [[ -z "${finding_pods_count[$type]}" ]]; then
+        finding_pods_count[$type]=0
+        finding_total_savings[$type]=0
+        finding_severity[$type]="$severity"
+        finding_examples[$type]=""
+    fi
+
+    # Increment count and add savings
+    finding_pods_count[$type]=$((finding_pods_count[$type] + 1))
+    finding_total_savings[$type]=$((finding_total_savings[$type] + savings))
+
+    # Track top 5 examples per type (only if savings > 0)
+    if [[ $savings -gt 0 ]]; then
+        local example_count=$(echo "${finding_examples[$type]}" | grep -o '"pod":' | wc -l)
+        if [[ $example_count -lt 5 ]]; then
+            [[ -n "${finding_examples[$type]}" ]] && finding_examples[$type]="${finding_examples[$type]},"
+            finding_examples[$type]="${finding_examples[$type]}
+        {\"pod\":\"$pod\",\"namespace\":\"$ns\",\"savings\":$savings,\"requested\":\"$req\",\"actual\":\"$actual\"}"
+        fi
+    fi
 }
 
 if [ "$USE_BASIC_COUNT" = false ]; then
@@ -302,9 +307,8 @@ if [ "$USE_BASIC_COUNT" = false ]; then
         # If nothing was set anywhere, treat as "no requests"
         if [[ $sum_mem_mib -eq 0 && $sum_cpu_mc -eq 0 ]]; then
           : $((pods_no_requests++))
-          # Record as finding
-          add_pod_finding "NO_REQUESTS" "HIGH" "$pod_name" "$pod_namespace" "0" \
-              "No resource requests set - causes unpredictable scheduling" "none" "unknown"
+          # Track as finding
+          track_finding "NO_REQUESTS" "HIGH" "$pod_name" "$pod_namespace" "0" "none" "unknown"
           continue
         fi
         
@@ -333,9 +337,8 @@ if [ "$USE_BASIC_COUNT" = false ]; then
                     memory_waste_monthly=$((memory_waste_monthly + waste_gb_cost))
                     pod_waste_total=$((pod_waste_total + waste_gb_cost))
                     : $((pods_over_provisioned++))
-                    # Record individual finding
-                    add_pod_finding "MEMORY_OVERPROVISIONED" "HIGH" "$pod_name" "$pod_namespace" "$waste_gb_cost" \
-                        "Memory: requesting ${sum_mem_mib}Mi but using ${actual_mem_mib}Mi" "${sum_mem_mib}Mi" "${actual_mem_mib}Mi"
+                    # Track finding
+                    track_finding "MEMORY_OVERPROVISIONED" "HIGH" "$pod_name" "$pod_namespace" "$waste_gb_cost" "${sum_mem_mib}Mi" "${actual_mem_mib}Mi"
                 fi
 
                 # CPU waste: request - actual usage (millicores)
@@ -348,9 +351,8 @@ if [ "$USE_BASIC_COUNT" = false ]; then
                     [[ $waste_cores_cost -eq 0 && $waste_cpu_annual -gt 0 ]] && waste_cores_cost=1
                     cpu_waste_monthly=$((cpu_waste_monthly + waste_cores_cost))
                     pod_waste_total=$((pod_waste_total + waste_cores_cost))
-                    # Record individual finding
-                    add_pod_finding "CPU_OVERPROVISIONED" "MEDIUM" "$pod_name" "$pod_namespace" "$waste_cores_cost" \
-                        "CPU: requesting ${sum_cpu_mc}m but using ${actual_cpu_mc}m" "${sum_cpu_mc}m" "${actual_cpu_mc}m"
+                    # Track finding
+                    track_finding "CPU_OVERPROVISIONED" "MEDIUM" "$pod_name" "$pod_namespace" "$waste_cores_cost" "${sum_cpu_mc}m" "${actual_cpu_mc}m"
                 fi
             fi
         else
@@ -365,9 +367,8 @@ if [ "$USE_BASIC_COUNT" = false ]; then
                 memory_waste_monthly=$((memory_waste_monthly + waste_gb_cost))
                 pod_waste_total=$((pod_waste_total + waste_gb_cost))
                 : $((pods_over_provisioned++))
-                # Record individual finding
-                add_pod_finding "MEMORY_OVERPROVISIONED" "HIGH" "$pod_name" "$pod_namespace" "$waste_gb_cost" \
-                    "Memory limit ${sum_mem_lim_mib}Mi exceeds request ${sum_mem_mib}Mi" "${sum_mem_mib}Mi" "${sum_mem_lim_mib}Mi"
+                # Track finding
+                track_finding "MEMORY_OVERPROVISIONED" "HIGH" "$pod_name" "$pod_namespace" "$waste_gb_cost" "${sum_mem_mib}Mi" "${sum_mem_lim_mib}Mi"
             fi
 
             # CPU over-provisioning: limit > 3x request
@@ -379,9 +380,8 @@ if [ "$USE_BASIC_COUNT" = false ]; then
                 [[ $waste_cores_cost -eq 0 && $waste_cpu_annual -gt 0 ]] && waste_cores_cost=1
                 cpu_waste_monthly=$((cpu_waste_monthly + waste_cores_cost))
                 pod_waste_total=$((pod_waste_total + waste_cores_cost))
-                # Record individual finding  
-                add_pod_finding "CPU_OVERPROVISIONED" "MEDIUM" "$pod_name" "$pod_namespace" "$waste_cores_cost" \
-                    "CPU limit ${sum_cpu_lim_mc}m exceeds request ${sum_cpu_mc}m" "${sum_cpu_mc}m" "${sum_cpu_lim_mc}m"
+                # Track finding
+                track_finding "CPU_OVERPROVISIONED" "MEDIUM" "$pod_name" "$pod_namespace" "$waste_cores_cost" "${sum_cpu_mc}m" "${sum_cpu_lim_mc}m"
             fi
         
         fi
@@ -532,9 +532,56 @@ track_event "audit_complete" "$TOTAL_ANNUAL_SAVINGS"
 CLUSTER_CONTEXT=$(kubectl config current-context 2>/dev/null || echo "default")
 CLUSTER_HASH=$(echo -n "$CLUSTER_CONTEXT" | shasum -a 256 2>/dev/null | cut -d' ' -f1 || echo "unknown")
 
-# Use the collected POD_FINDINGS for the JSON output
-# This includes all individual pod-level issues found during analysis
-FINDINGS="[$POD_FINDINGS
+# Generate aggregated findings JSON
+FINDINGS="["
+FINDING_IDX=0
+for finding_type in "${!finding_pods_count[@]}"; do
+    pods_affected="${finding_pods_count[$finding_type]}"
+    total_savings="${finding_total_savings[$finding_type]}"
+    severity="${finding_severity[$finding_type]}"
+    examples="${finding_examples[$finding_type]}"
+
+    # Format type for display
+    type_display=$(echo "$finding_type" | sed 's/_/ /g')
+
+    # Create description based on type
+    case "$finding_type" in
+        "MEMORY_OVERPROVISIONED")
+            description="Pods requesting significantly more memory than they use"
+            ;;
+        "CPU_OVERPROVISIONED")
+            description="Pods requesting more CPU than they use"
+            ;;
+        "NO_REQUESTS")
+            description="Pods with no resource requests set - causes unpredictable scheduling"
+            ;;
+        *)
+            description="Resource inefficiency detected"
+            ;;
+    esac
+
+    # Add comma separator for subsequent findings
+    [[ $FINDING_IDX -gt 0 ]] && FINDINGS="$FINDINGS,"
+
+    # Build finding JSON
+    FINDINGS="$FINDINGS
+    {
+      \"id\": \"finding-$FINDING_IDX\",
+      \"type\": \"$finding_type\",
+      \"severity\": \"$severity\",
+      \"podsAffected\": $pods_affected,
+      \"monthlySavings\": $total_savings,
+      \"description\": \"$description\",
+      \"details\": {
+        \"examples\": [$examples
+        ]
+      },
+      \"recommendation\": \"Right-size these pods to match actual usage\"
+    }"
+
+    : $((FINDING_IDX++))
+done
+FINDINGS="$FINDINGS
   ]"
 
 # Create detailed JSON output
