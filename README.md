@@ -12,8 +12,8 @@ Wozz helps engineering teams reduce Kubernetes spend through two approaches:
 
 | Tool | Purpose | How It Works |
 | :--- | :--- | :--- |
-| **[PR Cost Linter](https://github.com/WozzHQ/wozz/tree/main/action)** | **Prevention** | Analyzes pull requests for resource changes and comments with cost impact before merge. |
-| **[Audit CLI](https://github.com/WozzHQ/wozz/tree/main/cli)** | **Discovery** | Scans running clusters to identify over-provisioned pods and wasted resources. |
+| **PR Cost Linter** | **Prevention** | Analyzes pull requests for resource changes and comments with cost impact before merge. |
+| **Audit CLI** | **Discovery** | Scans running clusters to identify over-provisioned pods and wasted resources. |
 
 ---
 
@@ -38,8 +38,6 @@ jobs:
           cost-threshold: 100
 ```
 
-[→ View Full Documentation](https://github.com/WozzHQ/wozz/tree/main/action)
-
 ---
 
 ### 🔍 Audit CLI
@@ -47,12 +45,10 @@ jobs:
 
 ```bash
 # Download, Inspect, Run
-curl -o wozz.sh -L https://raw.githubusercontent.com/WozzHQ/wozz/main/cli/wozz.sh
+curl -o wozz.sh -L https://raw.githubusercontent.com/WozzHQ/wozz/main/scripts/wozz-audit.sh
 cat wozz.sh
 chmod +x wozz.sh && ./wozz.sh
 ```
-
-[→ View Full Documentation](https://github.com/WozzHQ/wozz/tree/main/cli)
 
 ---
 
