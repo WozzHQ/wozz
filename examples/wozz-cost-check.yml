@@ -1,0 +1,31 @@
+# Example GitHub Actions workflow for Wozz Cost Check
+# Place this file in .github/workflows/ in your repository
+
+name: Wozz Cost Check
+
+on:
+  pull_request:
+    paths:
+      - '**.yaml'
+      - '**.yml'
+
+jobs:
+  cost-lint:
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: read
+      pull-requests: write  # Required for posting comments
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Required for git diff
+      
+      - name: Run Wozz Cost Linter
+        uses: WozzHQ/wozz/action@main
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          cost-threshold: 100  # Alert if annual cost > $100
+

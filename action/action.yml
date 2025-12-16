@@ -1,0 +1,49 @@
+name: 'Wozz PR Cost Linter'
+description: 'Block expensive Kubernetes resource changes before they merge. Financial safety for your cluster.'
+branding:
+  icon: 'shield'
+  color: 'green'
+
+inputs:
+  github-token:
+    description: 'GitHub token for posting comments'
+    required: true
+  cost-threshold:
+    description: 'Annual cost threshold in USD. PRs exceeding this will trigger a warning comment.'
+    required: false
+    default: '50'
+  working-directory:
+    description: 'Directory containing Kubernetes manifests'
+    required: false
+    default: '.'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Check Python
+      shell: bash
+      run: |
+        if ! command -v python3 &> /dev/null; then
+          echo "Error: python3 is required but not installed."
+          exit 1
+        fi
+
+    - name: Install dependencies
+      shell: bash
+      run: |
+        python3 -m pip install --quiet pyyaml requests
+      
+    - name: Run cost audit on PR
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        COST_THRESHOLD: ${{ inputs.cost-threshold }}
+        WORKING_DIR: ${{ inputs.working-directory }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        REPO_OWNER: ${{ github.repository_owner }}
+        REPO_NAME: ${{ github.event.repository.name }}
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      run: |
+        python3 ${{ github.action_path }}/audit_pr.py
+

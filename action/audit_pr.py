@@ -1,0 +1,345 @@
+#!/usr/bin/env python3
+"""
+Wozz Layer 5: Financial Linter (PR Bot)
+Detects expensive Kubernetes resource changes in Pull Requests.
+"""
+
+import os
+import re
+import sys
+import subprocess
+import json
+from typing import List, Dict, Tuple, Optional
+import requests
+
+# Pricing constants (monthly)
+MEMORY_COST_PER_GB = 4.0  # $/GB/month
+CPU_COST_PER_CORE = 20.0  # $/vCPU/month
+
+def parse_resource_value(value: str, resource_type: str) -> float:
+    """Convert K8s resource strings to numeric values."""
+    if not value:
+        return 0.0
+    
+    value = value.strip()
+    
+    if resource_type == "memory":
+        # Memory: 8Gi, 4096Mi, 2G, etc.
+        if value.endswith("Gi"):
+            return float(value[:-2])
+        elif value.endswith("G"):
+            return float(value[:-1])
+        elif value.endswith("Mi"):
+            return float(value[:-2]) / 1024
+        elif value.endswith("M"):
+            return float(value[:-1]) / 1024
+        elif value.endswith("Ki"):
+            return float(value[:-2]) / (1024 * 1024)
+        elif value.endswith("K"):
+            return float(value[:-1]) / (1024 * 1024)
+        else:
+            # Assume bytes
+            return float(value) / (1024 * 1024 * 1024)
+    
+    elif resource_type == "cpu":
+        # CPU: 2, 500m, 0.5, etc.
+        if value.endswith("m"):
+            return float(value[:-1]) / 1000
+        else:
+            return float(value)
+    
+    return 0.0
+
+def calculate_annual_cost(memory_gb: float, cpu_cores: float) -> float:
+    """Calculate annual infrastructure cost."""
+    monthly_cost = (memory_gb * MEMORY_COST_PER_GB) + (cpu_cores * CPU_COST_PER_CORE)
+    return monthly_cost * 12
+
+def extract_resources_from_yaml(yaml_content: str, file_path: str) -> Dict[str, Dict[str, float]]:
+    """
+    Extract resource requests from Kubernetes YAML.
+    Returns dict of {resource_name: {memory: X, cpu: Y}}
+    """
+    resources = {}
+    
+    # Regex patterns for resource extraction
+    # Pattern: Find resources.requests section in YAML
+    requests_pattern = r'resources:\s*\n\s*requests:\s*\n\s*memory:\s*["\']?([^"\'\n]+)["\']?\s*\n\s*cpu:\s*["\']?([^"\'\n]+)["\']?'
+    
+    # Also capture just memory or just CPU
+    memory_only_pattern = r'resources:\s*\n\s*requests:\s*\n\s*memory:\s*["\']?([^"\'\n]+)["\']?'
+    cpu_only_pattern = r'resources:\s*\n\s*requests:\s*\n\s*cpu:\s*["\']?([^"\'\n]+)["\']?'
+    
+    # Extract resource name (deployment/statefulset name)
+    name_pattern = r'(?:metadata|name):\s*\n?\s*name:\s*["\']?([a-zA-Z0-9-]+)["\']?'
+    
+    resource_name = "unknown"
+    name_match = re.search(name_pattern, yaml_content)
+    if name_match:
+        resource_name = name_match.group(1)
+    
+    # Try full pattern first
+    full_matches = re.finditer(requests_pattern, yaml_content)
+    for match in full_matches:
+        memory_str, cpu_str = match.groups()
+        memory_gb = parse_resource_value(memory_str, "memory")
+        cpu_cores = parse_resource_value(cpu_str, "cpu")
+        
+        resources[f"{resource_name}@{file_path}"] = {
+            "memory": memory_gb,
+            "cpu": cpu_cores
+        }
+    
+    # Fallback to individual patterns if no full match
+    if not resources:
+        memory_match = re.search(memory_only_pattern, yaml_content)
+        cpu_match = re.search(cpu_only_pattern, yaml_content)
+        
+        if memory_match or cpu_match:
+            memory_gb = 0.0
+            cpu_cores = 0.0
+            
+            if memory_match:
+                memory_gb = parse_resource_value(memory_match.group(1), "memory")
+            if cpu_match:
+                cpu_gb = parse_resource_value(cpu_match.group(1), "cpu")
+            
+            resources[f"{resource_name}@{file_path}"] = {
+                "memory": memory_gb,
+                "cpu": cpu_cores
+            }
+    
+    return resources
+
+def get_changed_files(base_sha: str, head_sha: str) -> List[str]:
+    """Get list of changed YAML/Helm files in the PR."""
+    try:
+        result = subprocess.run(
+            ["git", "diff", "--name-only", base_sha, head_sha],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        
+        files = result.stdout.strip().split("\n")
+        # Filter for Kubernetes manifests
+        k8s_files = [
+            f for f in files
+            if f.endswith(('.yaml', '.yml', '.helm'))
+            and os.path.exists(f)
+        ]
+        return k8s_files
+    
+    except subprocess.CalledProcessError as e:
+        print(f"Error getting changed files: {e}")
+        return []
+
+def get_file_diff(file_path: str, base_sha: str, head_sha: str) -> Tuple[Optional[str], Optional[str]]:
+    """Get old and new content for a file."""
+    try:
+        # Get old version
+        old_content = subprocess.run(
+            ["git", "show", f"{base_sha}:{file_path}"],
+            capture_output=True,
+            text=True
+        ).stdout
+        
+        # Get new version
+        new_content = subprocess.run(
+            ["git", "show", f"{head_sha}:{file_path}"],
+            capture_output=True,
+            text=True
+        ).stdout
+        
+        return old_content, new_content
+    
+    except Exception as e:
+        print(f"Error getting diff for {file_path}: {e}")
+        return None, None
+
+def analyze_pr_costs(base_sha: str, head_sha: str) -> List[Dict]:
+    """Analyze all changed files and calculate cost impacts."""
+    changed_files = get_changed_files(base_sha, head_sha)
+    print(f"Found {len(changed_files)} changed Kubernetes manifest(s)")
+    
+    cost_changes = []
+    
+    for file_path in changed_files:
+        print(f"Analyzing {file_path}...")
+        
+        old_content, new_content = get_file_diff(file_path, base_sha, head_sha)
+        
+        if not old_content or not new_content:
+            continue
+        
+        old_resources = extract_resources_from_yaml(old_content, file_path)
+        new_resources = extract_resources_from_yaml(new_content, file_path)
+        
+        # Compare resources
+        all_resource_names = set(old_resources.keys()) | set(new_resources.keys())
+        
+        for resource_name in all_resource_names:
+            old_res = old_resources.get(resource_name, {"memory": 0, "cpu": 0})
+            new_res = new_resources.get(resource_name, {"memory": 0, "cpu": 0})
+            
+            old_cost = calculate_annual_cost(old_res["memory"], old_res["cpu"])
+            new_cost = calculate_annual_cost(new_res["memory"], new_res["cpu"])
+            cost_diff = new_cost - old_cost
+            
+            if abs(cost_diff) > 1:  # Only report changes > $1/year
+                cost_changes.append({
+                    "resource": resource_name.split("@")[0],
+                    "file": file_path,
+                    "old_memory": old_res["memory"],
+                    "new_memory": new_res["memory"],
+                    "old_cpu": old_res["cpu"],
+                    "new_cpu": new_res["cpu"],
+                    "old_cost": old_cost,
+                    "new_cost": new_cost,
+                    "cost_diff": cost_diff
+                })
+    
+    return cost_changes
+
+def format_cost(cost: float) -> str:
+    """Format cost with sign and currency."""
+    sign = "+" if cost > 0 else ""
+    return f"{sign}${abs(cost):,.0f}/yr"
+
+def create_pr_comment(cost_changes: List[Dict], threshold: float) -> str:
+    """Generate formatted PR comment."""
+    total_impact = sum(change["cost_diff"] for change in cost_changes)
+    
+    if abs(total_impact) < threshold:
+        return ""  # Below threshold, don't comment
+    
+    # Determine severity
+    if total_impact > threshold * 5:
+        emoji = "🚨"
+        severity = "CRITICAL"
+    elif total_impact > threshold * 2:
+        emoji = "⚠️"
+        severity = "HIGH"
+    else:
+        emoji = "💰"
+        severity = "MODERATE"
+    
+    comment = f"""## {emoji} Wozz Cost Alert: {severity} Impact
+
+This PR changes cloud infrastructure costs by **{format_cost(total_impact)}**.
+
+<details>
+<summary><strong>📊 Cost Breakdown by Resource</strong></summary>
+
+| Resource | File | Old Resources | New Resources | Annual Impact |
+|:---------|:-----|:--------------|:--------------|:--------------|
+"""
+    
+    # Sort by cost impact (descending)
+    cost_changes_sorted = sorted(cost_changes, key=lambda x: abs(x["cost_diff"]), reverse=True)
+    
+    for change in cost_changes_sorted:
+        old_spec = f"{change['old_memory']:.1f}Gi / {change['old_cpu']:.2f} CPU"
+        new_spec = f"{change['new_memory']:.1f}Gi / {change['new_cpu']:.2f} CPU"
+        impact = format_cost(change["cost_diff"])
+        
+        comment += f"| `{change['resource']}` | `{change['file']}` | {old_spec} | {new_spec} | **{impact}** |\n"
+    
+    comment += "\n</details>\n\n"
+    
+    # Recommendations
+    if total_impact > 0:
+        comment += """### 🔍 Recommendations
+
+1. **Validate necessity**: Are these increased resource requests required?
+2. **Check actual usage**: Use `kubectl top` to see current utilization
+3. **Consider alternatives**: Can you optimize the application instead?
+4. **Test in staging**: Verify the new limits are actually needed
+
+"""
+    
+    comment += """---
+
+<sub>**Wozz Defense Grid** - Layer 5: Financial Linter | [Learn More](https://wozz.io) | [Install the Bot](https://github.com/WozzHQ/wozz/tree/main/action)</sub>
+"""
+    
+    return comment
+
+def post_pr_comment(comment: str, pr_number: int, repo_owner: str, repo_name: str, token: str):
+    """Post comment to GitHub PR."""
+    url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/issues/{pr_number}/comments"
+    
+    headers = {
+        "Authorization": f"token {token}",
+        "Accept": "application/vnd.github.v3+json"
+    }
+    
+    data = {"body": comment}
+    
+    response = requests.post(url, headers=headers, json=data)
+    
+    if response.status_code == 201:
+        print("✓ Successfully posted cost analysis to PR")
+    else:
+        print(f"✗ Failed to post comment: {response.status_code}")
+        print(response.text)
+
+def main():
+    """Main execution flow."""
+    print("🛡️  Wozz Layer 5: Financial Linter")
+    print("=" * 50)
+    
+    # Get environment variables
+    github_token = os.getenv("GITHUB_TOKEN")
+    cost_threshold = float(os.getenv("COST_THRESHOLD", "50"))
+    pr_number = os.getenv("PR_NUMBER")
+    repo_owner = os.getenv("REPO_OWNER")
+    repo_name = os.getenv("REPO_NAME")
+    base_sha = os.getenv("BASE_SHA")
+    head_sha = os.getenv("HEAD_SHA")
+    working_dir = os.getenv("WORKING_DIR", ".")
+    
+    # Validate inputs
+    if not all([github_token, pr_number, repo_owner, repo_name, base_sha, head_sha]):
+        print("Error: Missing required environment variables")
+        sys.exit(1)
+    
+    try:
+        pr_number = int(pr_number)
+    except ValueError:
+        print("Error: PR_NUMBER must be a number")
+        sys.exit(1)
+    
+    # Change to working directory
+    if working_dir != ".":
+        os.chdir(working_dir)
+    
+    print(f"Analyzing PR #{pr_number} in {repo_owner}/{repo_name}")
+    print(f"Cost threshold: ${cost_threshold}/year")
+    print()
+    
+    # Analyze costs
+    cost_changes = analyze_pr_costs(base_sha, head_sha)
+    
+    if not cost_changes:
+        print("✓ No significant cost changes detected")
+        sys.exit(0)
+    
+    total_impact = sum(change["cost_diff"] for change in cost_changes)
+    print(f"\n📊 Total annual cost impact: {format_cost(total_impact)}")
+    
+    # Generate and post comment if above threshold
+    if abs(total_impact) >= cost_threshold:
+        comment = create_pr_comment(cost_changes, cost_threshold)
+        if comment:
+            post_pr_comment(comment, pr_number, repo_owner, repo_name, github_token)
+            print(f"\n⚠️  Cost impact exceeds threshold (${cost_threshold}/year)")
+            sys.exit(1)  # Exit with error to mark check as failed
+    else:
+        print(f"✓ Cost impact below threshold (${cost_threshold}/year)")
+    
+    sys.exit(0)
+
+if __name__ == "__main__":
+    main()
+
