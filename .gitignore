@@ -76,3 +76,4 @@ docs/DEVELOPMENT_STRATEGY.md
 __pycache__/
 *.pyc
 *.pyo
+__pycache__/

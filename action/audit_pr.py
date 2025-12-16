@@ -206,7 +206,22 @@ def format_cost(cost: float) -> str:
     sign = "+" if cost > 0 else ""
     return f"{sign}${abs(cost):,.0f}/yr"
 
-def create_pr_comment(cost_changes: List[Dict], threshold: float) -> str:
+def get_trend_arrow(cost_diff: float) -> str:
+    """Get trend arrow emoji based on cost change."""
+    if cost_diff > 1000:
+        return "🔴"  # Critical increase
+    elif cost_diff > 100:
+        return "🟡"  # Moderate increase
+    elif cost_diff > 0:
+        return "🟢"  # Small increase
+    elif cost_diff < -1000:
+        return "💚"  # Large savings
+    elif cost_diff < -100:
+        return "⬇️"  # Moderate savings
+    else:
+        return "⬇️"  # Small savings
+
+def create_pr_comment(cost_changes: List[Dict], threshold: float, api_key: str = "", repo_full_name: str = "") -> str:
     """Generate formatted PR comment."""
     total_impact = sum(change["cost_diff"] for change in cost_changes)
     
@@ -241,9 +256,10 @@ This PR changes cloud infrastructure costs by **{format_cost(total_impact)}**.
     for change in cost_changes_sorted:
         old_spec = f"{change['old_memory']:.1f}Gi / {change['old_cpu']:.2f} CPU"
         new_spec = f"{change['new_memory']:.1f}Gi / {change['new_cpu']:.2f} CPU"
+        trend = get_trend_arrow(change["cost_diff"])
         impact = format_cost(change["cost_diff"])
         
-        comment += f"| `{change['resource']}` | `{change['file']}` | {old_spec} | {new_spec} | **{impact}** |\n"
+        comment += f"| `{change['resource']}` | `{change['file']}` | {old_spec} | {new_spec} | {trend} **{impact}** |\n"
     
     comment += "\n</details>\n\n"
     
@@ -258,10 +274,26 @@ This PR changes cloud infrastructure costs by **{format_cost(total_impact)}**.
 
 """
     
-    comment += """---
+    comment += "\n---\n\n"
+    
+    # Add SaaS upsell footer if no API key
+    if not api_key or api_key.strip() == "":
+        comment += f"""### 📉 Want to reduce false positives?
 
-<sub>**Wozz Defense Grid** - Layer 5: Financial Linter | [Learn More](https://wozz.io) | [Install the Bot](https://github.com/WozzHQ/wozz/tree/main/action)</sub>
+Connect this repo to Wozz to enable:
+- **AI-powered analysis** - Ignore necessary changes (JVM upgrades, scaling events)
+- **Historical cost tracking** - See trends over time on your dashboard
+- **Team-wide ignore rules** - Centralized configuration for your organization
+
+[**Connect {repo_full_name} to Wozz →**](https://wozz.io/connect?repo={repo_full_name})
+
+---
+
 """
+    else:
+        comment += "✅ **Connected to Wozz Cloud** - Enhanced analysis enabled\n\n---\n\n"
+    
+    comment += '<sub>Powered by <a href="https://wozz.io">Wozz</a> | <a href="https://github.com/WozzHQ/wozz">Open Source</a></sub>\n'
     
     return comment
 
@@ -295,9 +327,11 @@ def main():
     pr_number = os.getenv("PR_NUMBER")
     repo_owner = os.getenv("REPO_OWNER")
     repo_name = os.getenv("REPO_NAME")
+    repo_full_name = os.getenv("REPO_FULL_NAME", f"{repo_owner}/{repo_name}")
     base_sha = os.getenv("BASE_SHA")
     head_sha = os.getenv("HEAD_SHA")
     working_dir = os.getenv("WORKING_DIR", ".")
+    api_key = os.getenv("WOZZ_API_KEY", "")
     
     # Validate inputs
     if not all([github_token, pr_number, repo_owner, repo_name, base_sha, head_sha]):
@@ -316,6 +350,12 @@ def main():
     
     print(f"Analyzing PR #{pr_number} in {repo_owner}/{repo_name}")
     print(f"Cost threshold: ${cost_threshold}/year")
+    
+    if api_key and api_key.strip():
+        print("✓ Connected to Wozz Cloud - Enhanced analysis enabled")
+    else:
+        print("ℹ️  Running in local mode (connect to Wozz for AI analysis)")
+    
     print()
     
     # Analyze costs
@@ -330,7 +370,7 @@ def main():
     
     # Generate and post comment if above threshold
     if abs(total_impact) >= cost_threshold:
-        comment = create_pr_comment(cost_changes, cost_threshold)
+        comment = create_pr_comment(cost_changes, cost_threshold, api_key, repo_full_name)
         if comment:
             post_pr_comment(comment, pr_number, repo_owner, repo_name, github_token)
             print(f"\n⚠️  Cost impact exceeds threshold (${cost_threshold}/year)")

@@ -16,6 +16,10 @@ inputs:
     description: 'Directory containing Kubernetes manifests'
     required: false
     default: '.'
+  api-key:
+    description: 'Wozz API key for enhanced features (AI analysis, historical tracking, team rules)'
+    required: false
+    default: ''
 
 runs:
   using: 'composite'
@@ -39,9 +43,11 @@ runs:
         GITHUB_TOKEN: ${{ inputs.github-token }}
         COST_THRESHOLD: ${{ inputs.cost-threshold }}
         WORKING_DIR: ${{ inputs.working-directory }}
+        WOZZ_API_KEY: ${{ inputs.api-key }}
         PR_NUMBER: ${{ github.event.pull_request.number }}
         REPO_OWNER: ${{ github.repository_owner }}
         REPO_NAME: ${{ github.event.repository.name }}
+        REPO_FULL_NAME: ${{ github.repository }}
         BASE_SHA: ${{ github.event.pull_request.base.sha }}
         HEAD_SHA: ${{ github.event.pull_request.head.sha }}
       run: |
