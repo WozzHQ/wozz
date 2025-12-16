@@ -65,14 +65,10 @@ def extract_resources_from_yaml(yaml_content: str, file_path: str) -> Dict[str, 
     # Split YAML into separate documents (separated by ---)
     documents = yaml_content.split('\n---\n')
 
-    # Regex patterns for resource extraction
-    # Pattern: Find resources.requests section in YAML
-    requests_pattern = r'resources:\s*\n\s*requests:\s*\n\s*memory:\s*["\']?([^"\'\n]+)["\']?\s*\n\s*cpu:\s*["\']?([^"\'\n]+)["\']?'
-
-    # Also capture just memory or just CPU
-    memory_only_pattern = r'resources:\s*\n\s*requests:\s*\n\s*memory:\s*["\']?([^"\'\n]+)["\']?'
-    cpu_only_pattern = r'resources:\s*\n\s*requests:\s*\n\s*cpu:\s*["\']?([^"\'\n]+)["\']?'
-
+    # Regex patterns - extract memory and cpu independently (order doesn't matter)
+    memory_pattern = r'requests:\s*\n(?:[^\n]*\n)*?\s*memory:\s*["\']?([^"\'\n]+)["\']?'
+    cpu_pattern = r'requests:\s*\n(?:[^\n]*\n)*?\s*cpu:\s*["\']?([^"\'\n]+)["\']?'
+    
     # Extract resource name (deployment/statefulset name)
     name_pattern = r'metadata:\s*\n\s*name:\s*["\']?([a-zA-Z0-9-]+)["\']?'
 
@@ -87,38 +83,25 @@ def extract_resources_from_yaml(yaml_content: str, file_path: str) -> Dict[str, 
         if name_match:
             resource_name = name_match.group(1)
 
-        # Try full pattern first (memory + cpu)
-        full_match = re.search(requests_pattern, document)
-        if full_match:
-            memory_str, cpu_str = full_match.groups()
-            memory_gb = parse_resource_value(memory_str, "memory")
-            cpu_cores = parse_resource_value(cpu_str, "cpu")
+        # Extract memory and cpu independently (order-agnostic)
+        memory_match = re.search(memory_pattern, document)
+        cpu_match = re.search(cpu_pattern, document)
+
+        if memory_match or cpu_match:
+            memory_gb = 0.0
+            cpu_cores = 0.0
+
+            if memory_match:
+                memory_gb = parse_resource_value(memory_match.group(1), "memory")
+            if cpu_match:
+                cpu_cores = parse_resource_value(cpu_match.group(1), "cpu")
 
             resources[f"{resource_name}@{file_path}"] = {
                 "memory": memory_gb,
                 "cpu": cpu_cores
             }
-        else:
-            # Fallback to individual patterns
-            memory_match = re.search(memory_only_pattern, document)
-            cpu_match = re.search(cpu_only_pattern, document)
-
-            if memory_match or cpu_match:
-                memory_gb = 0.0
-                cpu_cores = 0.0
-
-                if memory_match:
-                    memory_gb = parse_resource_value(memory_match.group(1), "memory")
-                if cpu_match:
-                    cpu_cores = parse_resource_value(cpu_match.group(1), "cpu")
-
-                resources[f"{resource_name}@{file_path}"] = {
-                    "memory": memory_gb,
-                    "cpu": cpu_cores
-                }
 
     return resources
-
 
 def get_changed_files(base_sha: str, head_sha: str) -> List[str]:
     """Get list of changed YAML/Helm files in the PR."""
