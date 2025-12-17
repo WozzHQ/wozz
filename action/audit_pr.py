@@ -55,35 +55,44 @@ def calculate_annual_cost(memory_gb: float, cpu_cores: float) -> float:
     monthly_cost = (memory_gb * MEMORY_COST_PER_GB) + (cpu_cores * CPU_COST_PER_CORE)
     return monthly_cost * 12
 
-def extract_resources_from_yaml(yaml_content: str, file_path: str) -> Dict[str, Dict[str, float]]:
+def extract_resources_from_yaml(yaml_content: str, file_path: str) -> Dict[str, Dict]:
     """
-    Extract resource requests from Kubernetes YAML.
-    Returns dict of {resource_name: {memory: X, cpu: Y}}
+    Extract resource requests and replica info from Kubernetes YAML.
+    Returns dict of {resource_name: {memory: X, cpu: Y, min_replicas: N, max_replicas: M}}
     """
     resources = {}
 
     # Split YAML into separate documents (separated by ---)
     documents = yaml_content.split('\n---\n')
 
-    # Regex patterns - extract memory and cpu independently (order doesn't matter)
+    # Regex patterns for resource extraction
     memory_pattern = r'requests:\s*\n(?:[^\n]*\n)*?\s*memory:\s*["\']?([^"\'\n]+)["\']?'
     cpu_pattern = r'requests:\s*\n(?:[^\n]*\n)*?\s*cpu:\s*["\']?([^"\'\n]+)["\']?'
-    
-    # Extract resource name (deployment/statefulset name)
+
+    # Extract resource name and type
     name_pattern = r'metadata:\s*\n\s*name:\s*["\']?([a-zA-Z0-9-]+)["\']?'
+    kind_pattern = r'kind:\s*([A-Za-z]+)'
+
+    # Replica patterns
+    replicas_pattern = r'(?:^|\n)replicas:\s*(\d+)'
+    min_replicas_pattern = r'minReplicas:\s*(\d+)'
+    max_replicas_pattern = r'maxReplicas:\s*(\d+)'
 
     # Process each document separately
     for doc_index, document in enumerate(documents):
         if not document.strip():
             continue
 
-        # Extract resource name for this document
+        # Extract resource name and kind
         resource_name = f"resource-{doc_index}"
         name_match = re.search(name_pattern, document)
         if name_match:
             resource_name = name_match.group(1)
 
-        # Extract memory and cpu independently (order-agnostic)
+        kind_match = re.search(kind_pattern, document)
+        resource_kind = kind_match.group(1) if kind_match else "Unknown"
+
+        # Extract memory and cpu independently
         memory_match = re.search(memory_pattern, document)
         cpu_match = re.search(cpu_pattern, document)
 
@@ -96,9 +105,32 @@ def extract_resources_from_yaml(yaml_content: str, file_path: str) -> Dict[str, 
             if cpu_match:
                 cpu_cores = parse_resource_value(cpu_match.group(1), "cpu")
 
+            # Extract replica information
+            min_replicas = 1
+            max_replicas = 1
+
+            # Check for HPA (HorizontalPodAutoscaler)
+            if resource_kind == "HorizontalPodAutoscaler":
+                min_match = re.search(min_replicas_pattern, document)
+                max_match = re.search(max_replicas_pattern, document)
+                if min_match:
+                    min_replicas = int(min_match.group(1))
+                if max_match:
+                    max_replicas = int(max_match.group(1))
+            else:
+                # Check for static replicas in Deployment/StatefulSet
+                replicas_match = re.search(replicas_pattern, document)
+                if replicas_match:
+                    replicas = int(replicas_match.group(1))
+                    min_replicas = replicas
+                    max_replicas = replicas
+
             resources[f"{resource_name}@{file_path}"] = {
                 "memory": memory_gb,
-                "cpu": cpu_cores
+                "cpu": cpu_cores,
+                "min_replicas": min_replicas,
+                "max_replicas": max_replicas,
+                "kind": resource_kind
             }
 
     return resources
@@ -150,35 +182,52 @@ def get_file_diff(file_path: str, base_sha: str, head_sha: str) -> Tuple[Optiona
         return None, None
 
 def analyze_pr_costs(base_sha: str, head_sha: str) -> List[Dict]:
-    """Analyze all changed files and calculate cost impacts."""
+    """Analyze all changed files and calculate cost impacts with risk ranges."""
     changed_files = get_changed_files(base_sha, head_sha)
     print(f"Found {len(changed_files)} changed Kubernetes manifest(s)")
-    
+
     cost_changes = []
-    
+
     for file_path in changed_files:
         print(f"Analyzing {file_path}...")
-        
+
         old_content, new_content = get_file_diff(file_path, base_sha, head_sha)
-        
+
         if not old_content or not new_content:
             continue
-        
+
         old_resources = extract_resources_from_yaml(old_content, file_path)
         new_resources = extract_resources_from_yaml(new_content, file_path)
-        
+
         # Compare resources
         all_resource_names = set(old_resources.keys()) | set(new_resources.keys())
-        
+
         for resource_name in all_resource_names:
-            old_res = old_resources.get(resource_name, {"memory": 0, "cpu": 0})
-            new_res = new_resources.get(resource_name, {"memory": 0, "cpu": 0})
-            
-            old_cost = calculate_annual_cost(old_res["memory"], old_res["cpu"])
-            new_cost = calculate_annual_cost(new_res["memory"], new_res["cpu"])
-            cost_diff = new_cost - old_cost
-            
-            if abs(cost_diff) > 1:  # Only report changes > $1/year
+            old_res = old_resources.get(resource_name, {
+                "memory": 0, "cpu": 0, "min_replicas": 1, "max_replicas": 1, "kind": "Unknown"
+            })
+            new_res = new_resources.get(resource_name, {
+                "memory": 0, "cpu": 0, "min_replicas": 1, "max_replicas": 1, "kind": "Unknown"
+            })
+
+            # Calculate per-pod costs
+            old_cost_per_pod = calculate_annual_cost(old_res["memory"], old_res["cpu"])
+            new_cost_per_pod = calculate_annual_cost(new_res["memory"], new_res["cpu"])
+
+            # Calculate min/max costs based on replicas
+            old_min_cost = old_cost_per_pod * old_res["min_replicas"]
+            old_max_cost = old_cost_per_pod * old_res["max_replicas"]
+            new_min_cost = new_cost_per_pod * new_res["min_replicas"]
+            new_max_cost = new_cost_per_pod * new_res["max_replicas"]
+
+            # Cost diff ranges
+            min_cost_diff = new_min_cost - old_min_cost
+            max_cost_diff = new_max_cost - old_max_cost
+
+            # Use the worst case (max) for threshold checks
+            if abs(max_cost_diff) > 1:  # Only report changes > $1/year
+                has_range = new_res["min_replicas"] != new_res["max_replicas"]
+
                 cost_changes.append({
                     "resource": resource_name.split("@")[0],
                     "file": file_path,
@@ -186,11 +235,16 @@ def analyze_pr_costs(base_sha: str, head_sha: str) -> List[Dict]:
                     "new_memory": new_res["memory"],
                     "old_cpu": old_res["cpu"],
                     "new_cpu": new_res["cpu"],
-                    "old_cost": old_cost,
-                    "new_cost": new_cost,
-                    "cost_diff": cost_diff
+                    "old_min_replicas": old_res["min_replicas"],
+                    "old_max_replicas": old_res["max_replicas"],
+                    "new_min_replicas": new_res["min_replicas"],
+                    "new_max_replicas": new_res["max_replicas"],
+                    "min_cost_diff": min_cost_diff,
+                    "max_cost_diff": max_cost_diff,
+                    "has_range": has_range,
+                    "kind": new_res.get("kind", "Unknown")
                 })
-    
+
     return cost_changes
 
 def format_cost(cost: float) -> str:
@@ -213,50 +267,81 @@ def get_trend_arrow(cost_diff: float) -> str:
     else:
         return "⬇️"  # Small savings
 
+def format_cost_range(min_cost: float, max_cost: float, has_range: bool) -> str:
+    """Format cost as a range if applicable."""
+    if not has_range or abs(min_cost - max_cost) < 1:
+        # Single value
+        sign = "+" if max_cost > 0 else ""
+        return f"{sign}${abs(max_cost):,.0f}/yr"
+    else:
+        # Range
+        sign_min = "+" if min_cost > 0 else ""
+        sign_max = "+" if max_cost > 0 else ""
+        return f"{sign_min}${abs(min_cost):,.0f} to {sign_max}${abs(max_cost):,.0f}/yr"
+
 def create_pr_comment(cost_changes: List[Dict], threshold: float, api_key: str = "", repo_full_name: str = "") -> str:
-    """Generate formatted PR comment."""
-    total_impact = sum(change["cost_diff"] for change in cost_changes)
-    
-    if abs(total_impact) < threshold:
+    """Generate formatted PR comment with cost risk ranges."""
+    # Calculate total impact using worst-case (max) scenarios
+    total_min_impact = sum(change["min_cost_diff"] for change in cost_changes)
+    total_max_impact = sum(change["max_cost_diff"] for change in cost_changes)
+    has_any_range = any(change["has_range"] for change in cost_changes)
+
+    if abs(total_max_impact) < threshold:
         return ""  # Below threshold, don't comment
-    
-    # Determine severity
-    if total_impact > threshold * 5:
+
+    # Determine severity based on worst case
+    if total_max_impact > threshold * 5:
         emoji = "🚨"
         severity = "CRITICAL"
-    elif total_impact > threshold * 2:
+    elif total_max_impact > threshold * 2:
         emoji = "⚠️"
         severity = "HIGH"
     else:
         emoji = "💰"
         severity = "MODERATE"
-    
+
+    total_impact_str = format_cost_range(total_min_impact, total_max_impact, has_any_range)
+
     comment = f"""## {emoji} Wozz Cost Alert: {severity} Impact
 
-This PR changes cloud infrastructure costs by **{format_cost(total_impact)}**.
+This PR changes cloud infrastructure costs by **{total_impact_str}**.
 
-<details>
+"""
+
+    if has_any_range:
+        comment += "_Cost shown as range due to autoscaling (min-max replicas)._\n\n"
+
+    comment += """<details>
 <summary><strong>📊 Cost Breakdown by Resource</strong></summary>
 
-| Resource | File | Old Resources | New Resources | Annual Impact |
-|:---------|:-----|:--------------|:--------------|:--------------|
+| Resource | File | Old Config | New Config | Annual Impact |
+|:---------|:-----|:-----------|:-----------|:--------------|
 """
-    
-    # Sort by cost impact (descending)
-    cost_changes_sorted = sorted(cost_changes, key=lambda x: abs(x["cost_diff"]), reverse=True)
-    
+
+    # Sort by worst-case cost impact (descending)
+    cost_changes_sorted = sorted(cost_changes, key=lambda x: abs(x["max_cost_diff"]), reverse=True)
+
     for change in cost_changes_sorted:
         old_spec = f"{change['old_memory']:.1f}Gi / {change['old_cpu']:.2f} CPU"
         new_spec = f"{change['new_memory']:.1f}Gi / {change['new_cpu']:.2f} CPU"
-        trend = get_trend_arrow(change["cost_diff"])
-        impact = format_cost(change["cost_diff"])
-        
+
+        # Add replica info if it changed or has a range
+        if change['has_range']:
+            old_spec += f" × {change['old_min_replicas']}-{change['old_max_replicas']} replicas"
+            new_spec += f" × {change['new_min_replicas']}-{change['new_max_replicas']} replicas"
+        elif change['new_min_replicas'] > 1:
+            old_spec += f" × {change['old_min_replicas']}"
+            new_spec += f" × {change['new_min_replicas']}"
+
+        trend = get_trend_arrow(change["max_cost_diff"])
+        impact = format_cost_range(change["min_cost_diff"], change["max_cost_diff"], change["has_range"])
+
         comment += f"| `{change['resource']}` | `{change['file']}` | {old_spec} | {new_spec} | {trend} **{impact}** |\n"
-    
+
     comment += "\n</details>\n\n"
-    
+
     # Recommendations
-    if total_impact > 0:
+    if total_max_impact > 0:
         comment += """### 🔍 Recommendations
 
 1. **Validate necessity**: Are these increased resource requests required?
@@ -352,16 +437,21 @@ def main():
     
     # Analyze costs
     cost_changes = analyze_pr_costs(base_sha, head_sha)
-    
+
     if not cost_changes:
         print("✓ No significant cost changes detected")
         sys.exit(0)
-    
-    total_impact = sum(change["cost_diff"] for change in cost_changes)
-    print(f"\n📊 Total annual cost impact: {format_cost(total_impact)}")
-    
-    # Generate and post comment if above threshold
-    if abs(total_impact) >= cost_threshold:
+
+    # Calculate total impact ranges
+    total_min_impact = sum(change["min_cost_diff"] for change in cost_changes)
+    total_max_impact = sum(change["max_cost_diff"] for change in cost_changes)
+    has_any_range = any(change["has_range"] for change in cost_changes)
+
+    impact_str = format_cost_range(total_min_impact, total_max_impact, has_any_range)
+    print(f"\n📊 Total annual cost impact: {impact_str}")
+
+    # Use worst case (max) for threshold checks
+    if abs(total_max_impact) >= cost_threshold:
         comment = create_pr_comment(cost_changes, cost_threshold, api_key, repo_full_name)
         if comment:
             post_pr_comment(comment, pr_number, repo_owner, repo_name, github_token)
@@ -369,9 +459,8 @@ def main():
             sys.exit(1)  # Exit with error to mark check as failed
     else:
         print(f"✓ Cost impact below threshold (${cost_threshold}/year)")
-    
+
     sys.exit(0)
 
 if __name__ == "__main__":
     main()
-
