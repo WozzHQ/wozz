@@ -24,7 +24,7 @@ jobs:
           fetch-depth: 0  # Required for git diff
       
       - name: Run Wozz Cost Linter
-        uses: WozzHQ/wozz/action@main
+        uses: WozzHQ/wozz@v1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           cost-threshold: 100  # Alert if annual cost > $100

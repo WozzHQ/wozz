@@ -54,7 +54,7 @@ jobs:
           fetch-depth: 0  # Need full history for git diff
 
       - name: Run Wozz Cost Linter
-        uses: WozzHQ/wozz/action@v1
+        uses: WozzHQ/wozz@v1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           cost-threshold: 100  # Alert if annual cost > $100
@@ -79,7 +79,7 @@ That's it. The action will now analyze all PRs touching Kubernetes manifests.
 ### Example: Custom Configuration
 
 ```yaml
-- uses: WozzHQ/wozz/action@v1
+- uses: WozzHQ/wozz@v1
   with:
     github-token: ${{ secrets.GITHUB_TOKEN }}
     cost-threshold: 500        # Only alert for big changes
@@ -159,7 +159,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: WozzHQ/wozz/action@v1
+      - uses: WozzHQ/wozz@v1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           cost-threshold: 1000
@@ -172,7 +172,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: WozzHQ/wozz/action@v1
+      - uses: WozzHQ/wozz@v1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           cost-threshold: 200
@@ -188,7 +188,7 @@ The action automatically detects Helm templates. No special configuration needed
 Make the action a required check:
 
 ```yaml
-- uses: WozzHQ/wozz/action@v1
+- uses: WozzHQ/wozz@v1
   with:
     github-token: ${{ secrets.GITHUB_TOKEN }}
     cost-threshold: 100
@@ -242,7 +242,7 @@ The `GITHUB_TOKEN` only needs:
   with:
     python-version: '3.x'
 
-- uses: WozzHQ/wozz/action@v1
+- uses: WozzHQ/wozz@v1
   # ...
 ```
 

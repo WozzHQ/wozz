@@ -32,7 +32,7 @@ jobs:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
-      - uses: WozzHQ/wozz/action@main
+      - uses: WozzHQ/wozz@v1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           cost-threshold: 100
@@ -56,7 +56,7 @@ brew install wozz
 **GitHub Action (CI/CD):**
 ```yaml
 # .github/workflows/wozz.yml
-- uses: WozzHQ/wozz/action@main
+- uses: WozzHQ/wozz@v1
   with:
     github-token: ${{ secrets.GITHUB_TOKEN }}
     cost-threshold: 100
