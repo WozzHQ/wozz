@@ -7,7 +7,7 @@ dist/
 *.log
 .oclif.manifest.json
 
-# Environment files
+# Environment
 .env
 .env.local
 .env.*.local
@@ -26,54 +26,12 @@ coverage/
 wozz-audit-*/
 *.tar.gz
 
-# Old AWS/Terraform code (archived, not needed)
-src/
-bin/
-tsconfig.json
-
-# Planning & Internal Documentation (KEEP PRIVATE)
-# These contain business strategy, pricing, internal notes
-ANALYSIS_AND_GAMEPLAN.md
-ARCHITECTURE_DIAGRAM.md
-BUG_FIX_VERIFIED.md
-CRITICAL_SECURITY_FIX.md
-CURRENT_STATUS_AND_NEXT_STEPS.md
-FINAL_IMPLEMENTATION_SPEC.md
-GITHUB_PUBLISH_GUIDE.md
-GITHUB_READY.md
-CLEANUP_AND_PUBLISH.md
-FINAL_PUBLISH_SUMMARY.md
-PUBLISH_NOW.md
-README_FOR_GITHUB.md
-.cursorrules
-IMPLEMENTATION_COMPLETE.md
-IMPLEMENTATION_READY.md
-IMPLEMENTATION_ROADMAP.md
-IMPLEMENTATION_STATUS.md
-PLANNING_COMPLETE.md
-PRE_LAUNCH_CHECKLIST.md
-PRODUCT_STATUS.md
-PIVOT_SUMMARY.md
-QUICK_REFERENCE.md
-START_HERE.md
-STATUS.md
-SETUP.md
-
-# Internal planning docs
-docs/K8S_PIVOT_PLAN.md
-docs/FILE_AUDIT.md
-docs/IMPLEMENTATION_PLAN.md
-docs/BUSINESS_CONTEXT.md
-docs/TECHNICAL_SPEC.md
-docs/DEVELOPMENT_STRATEGY.md
-
-# Keep these public (user-facing)
-# README.md
-# scripts/
-# test-fixtures/
-# LICENSE
-# package.json
+# Python
 __pycache__/
 *.pyc
 *.pyo
-__pycache__/
+
+# Archives
+src/
+bin/
+tsconfig.json

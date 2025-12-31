@@ -6,11 +6,17 @@ Scans your cluster and identifies over-provisioned resources. No agents, no modi
 
 ---
 
-## Quick Start
+## Installation
 
+**Homebrew (Recommended):**
 ```bash
-# Download and run
-curl -o wozz.sh -L https://raw.githubusercontent.com/WozzHQ/wozz/main/cli/wozz.sh
+brew tap WozzHQ/wozz
+brew install wozz
+```
+
+**Manual:**
+```bash
+curl -o wozz.sh -L https://raw.githubusercontent.com/WozzHQ/wozz/main/scripts/wozz-audit.sh
 cat wozz.sh  # Always inspect before running
 chmod +x wozz.sh && ./wozz.sh
 ```
@@ -83,4 +89,7 @@ WOZZ_NO_TELEMETRY=1 ./wozz.sh
 ## License
 
 MIT - Free to use in commercial and open-source projects.
+
+
+
 

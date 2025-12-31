@@ -43,6 +43,26 @@ jobs:
 ### 🔍 Audit CLI
 *Identifies waste in your current cluster. Runs locally.*
 
+[🔒 **No Data Exfiltration - Runs Locally**](#security)
+
+#### Installation
+
+**Homebrew (Recommended):**
+```bash
+brew tap WozzHQ/wozz
+brew install wozz
+```
+
+**GitHub Action (CI/CD):**
+```yaml
+# .github/workflows/wozz.yml
+- uses: WozzHQ/wozz/action@main
+  with:
+    github-token: ${{ secrets.GITHUB_TOKEN }}
+    cost-threshold: 100
+```
+
+**Manual / Advanced Installation:**
 ```bash
 # Download, Inspect, Run
 curl -o wozz.sh -L https://raw.githubusercontent.com/WozzHQ/wozz/main/scripts/wozz-audit.sh
