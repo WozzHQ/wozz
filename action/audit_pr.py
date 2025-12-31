@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Wozz Layer 5: Financial Linter (PR Bot)
+Wozz PR Cost Linter
 Detects expensive Kubernetes resource changes in Pull Requests.
 """
 
@@ -395,7 +395,7 @@ def post_pr_comment(comment: str, pr_number: int, repo_owner: str, repo_name: st
 
 def main():
     """Main execution flow."""
-    print("🛡️  Wozz Layer 5: Financial Linter")
+    print("Wozz PR Cost Linter")
     print("=" * 50)
     
     # Get environment variables

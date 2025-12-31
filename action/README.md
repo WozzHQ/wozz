@@ -1,6 +1,4 @@
-# 🛡️ Wozz PR Cost Linter (GitHub Action)
-
-**Layer 5 of the Wozz Defense Grid**
+# Wozz PR Cost Linter (GitHub Action)
 
 Automatically detect expensive Kubernetes resource changes in Pull Requests. Stop cost increases before they merge.
 
@@ -119,7 +117,7 @@ This PR changes cloud infrastructure costs by **+$384/yr**.
 
 ---
 
-<sub>**Wozz Defense Grid** - Layer 5: Financial Linter | [Learn More](https://wozz.io)</sub>
+<sub>Powered by <a href="https://wozz.io">Wozz</a></sub>
 ```
 
 ---
@@ -303,9 +301,8 @@ MIT License - Free to use in commercial and open-source projects.
 ---
 
 <p align="center">
-  <strong>Layer 5 of the Wozz Defense Grid</strong><br>
-  <a href="https://wozz.io">wozz.io</a> • 
-  <a href="https://github.com/WozzHQ/wozz">GitHub</a> •
-  <a href="https://wozz.io/docs">Documentation</a>
+  <a href="https://wozz.io">wozz.io</a> | 
+  <a href="https://github.com/WozzHQ/wozz">GitHub</a> |
+  <a href="https://github.com/WozzHQ/wozz/issues">Report Issue</a>
 </p>
 
